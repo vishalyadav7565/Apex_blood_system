@@ -1,0 +1,68 @@
+services:
+
+  # 🗄️ POSTGRES DB
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      FIREBASE_CREDENTIALS: /app/firebase-service-account.json
+      POSTGRES_DB: blood_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # ⚡ REDIS (NO PORT EXPOSE → avoid conflicts 🔥)
+  redis:
+    image: redis:7
+    container_name: redis
+    restart: always
+
+  # 🌐 DJANGO APP
+  web:
+    build: .
+    container_name: django_app
+    command: daphne -b 0.0.0.0 -p 8000 core.asgi:application
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+
+  # 🔥 CELERY WORKER
+  celery:
+    build: .
+    container_name: celery_worker
+    command: celery -A core worker -l info
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+
+  # ⏱️ CELERY BEAT (AUTO TASK SCHEDULER)
+  celery-beat:
+    build: .
+    container_name: celery_beat
+    command: celery -A core beat -l info
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:
+
+  

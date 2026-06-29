@@ -1,0 +1,45 @@
+# Django & Python
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Celery
+celerybeat-schedule
+celerybeat-schedule.db
+
+# Media and Static files
+/media/
+/staticfiles/
+/static/
+
+# Environment files
+.env
+firebase/firebase-service-account.json
+firebase-service-account.json
+firebase/*.json
+
+# Downloads / Huge installer files
+/Downloads/
+*.exe
+*.msi
+*.zip
+*.tar.gz
+*.tgz
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
