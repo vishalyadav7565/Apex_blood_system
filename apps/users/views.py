@@ -30,6 +30,21 @@ from .models import OTP, HelpSupport
 User = get_user_model()
 
 
+def normalize_phone(phone):
+    if not phone:
+        return ""
+    # Remove all non-digit characters
+    digits = "".join(c for c in phone if c.isdigit())
+    # If the number has 12 digits and starts with '91' (Indian country code), strip it
+    if len(digits) == 12 and digits.startswith("91"):
+        return digits[2:]
+    # If it has 11 digits and starts with '0', strip it
+    elif len(digits) == 11 and digits.startswith("0"):
+        return digits[1:]
+    return digits
+
+
+
 # =========================================
 # SEND OTP
 # =========================================
@@ -41,7 +56,7 @@ User = get_user_model()
 @api_view(['POST'])
 def send_otp(request):
 
-    phone = request.data.get('phone')
+    phone = normalize_phone(request.data.get('phone'))
 
     if not phone:
 
@@ -89,7 +104,7 @@ def send_otp(request):
 @api_view(['POST'])
 def verify_otp(request):
 
-    phone = request.data.get('phone')
+    phone = normalize_phone(request.data.get('phone'))
     otp = request.data.get('otp')
 
     # =================================
@@ -682,7 +697,7 @@ def firebase_login(request):
     try:
         # Verify the Firebase ID Token using Firebase Admin SDK
         decoded_token = firebase_auth.verify_id_token(id_token, clock_skew_seconds=60)
-        phone_number = decoded_token.get('phone_number')
+        phone_number = normalize_phone(decoded_token.get('phone_number'))
 
         if not phone_number:
             return Response(
