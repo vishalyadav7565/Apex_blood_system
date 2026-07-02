@@ -14,13 +14,10 @@ if not firebase_admin._apps:
 
     # Check file exists
     if not os.path.exists(FIREBASE_CREDENTIALS):
-        raise FileNotFoundError(
-            f"Firebase credentials file not found: {FIREBASE_CREDENTIALS}"
-        )
-
-    cred = credentials.Certificate(FIREBASE_CREDENTIALS)
-
-    firebase_admin.initialize_app(cred)
+        print(f"[WARNING] Firebase credentials file not found: {FIREBASE_CREDENTIALS}")
+    else:
+        cred = credentials.Certificate(FIREBASE_CREDENTIALS)
+        firebase_admin.initialize_app(cred)
 
 
 def verify_firebase_token(id_token):

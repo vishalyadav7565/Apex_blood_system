@@ -24,6 +24,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
 from firebase_admin import auth as firebase_auth
+from . import firebase_utils
 from .models import OTP, HelpSupport
 
 User = get_user_model()
