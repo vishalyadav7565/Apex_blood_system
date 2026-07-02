@@ -148,9 +148,15 @@ def register_hospital(request):
 # ==========================================
 # 🔐 LOGIN HOSPITAL
 # ==========================================
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 def login_hospital(request):
      
+    if request.method == 'GET':
+        return Response(
+            {"message": "Hospital Login Endpoint. Please submit a POST request with 'email' and 'password' in the request body."},
+            status=status.HTTP_200_OK
+        )
+
     print("===== LOGIN HIT =====")
     print(request.data)
 
