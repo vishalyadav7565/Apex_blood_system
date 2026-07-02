@@ -29,8 +29,8 @@ services:
     restart: always
     command: daphne -b 0.0.0.0 -p 8000 core.asgi:application
     volumes:
-      - static_volume:/app/staticfiles
-      - media_volume:/app/media
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -69,5 +69,3 @@ services:
 
 volumes:
   postgres_data:
-  static_volume:
-  media_volume:

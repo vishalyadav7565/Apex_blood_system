@@ -187,21 +187,22 @@ DATABASES = {
 # =====================================================
 # REDIS CACHE
 # =====================================================
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+# For Cache (use database 1 if URL targets database 0)
+if REDIS_URL.endswith('/0'):
+    cache_redis_url = REDIS_URL[:-2] + '/1'
+elif '/' not in REDIS_URL.split('://')[-1]:
+    cache_redis_url = REDIS_URL.rstrip('/') + '/1'
+else:
+    cache_redis_url = REDIS_URL
+
 CACHES = {
-
     "default": {
-
-        "BACKEND":
-            "django_redis.cache.RedisCache",
-
-        "LOCATION":
-            "redis://redis:6379/1",
-
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": cache_redis_url,
         "OPTIONS": {
-
-            "CLIENT_CLASS":
-                "django_redis.client.DefaultClient",
-
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
         }
     }
 }
@@ -210,11 +211,20 @@ CACHES = {
 # =====================================================
 # CHANNELS (WEBSOCKET)
 # =====================================================
+from urllib.parse import urlparse
+try:
+    parsed_redis = urlparse(REDIS_URL)
+    redis_host = parsed_redis.hostname or "redis"
+    redis_port = parsed_redis.port or 6379
+except Exception:
+    redis_host = "redis"
+    redis_port = 6379
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("redis", 6379)],
+            "hosts": [(redis_host, redis_port)],
             "capacity": 1500,
             "expiry": 60,
         },
@@ -341,9 +351,9 @@ SIMPLE_JWT = {
 # =====================================================
 # CELERY
 # =====================================================
-CELERY_BROKER_URL = "redis://redis:6379/0"
+CELERY_BROKER_URL = REDIS_URL
 
-CELERY_RESULT_BACKEND = "redis://redis:6379/0"
+CELERY_RESULT_BACKEND = REDIS_URL
 
 CELERY_ACCEPT_CONTENT = ['json']
 

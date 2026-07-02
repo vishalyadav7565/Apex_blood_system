@@ -684,11 +684,19 @@ def create_support_ticket(request):
 # =========================================
 # FIREBASE PHONE AUTHENTICATION LOGIN
 # =========================================
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def firebase_login(request):
 
-    id_token = request.data.get('idToken') or request.data.get('id_token')
+    if request.method == 'GET':
+        id_token = request.query_params.get('idToken') or request.query_params.get('id_token')
+        if not id_token:
+            return Response(
+                {"message": "Firebase Login Endpoint. Please submit a POST request with 'idToken' in the request body, or a GET request with 'idToken' in the query parameters."},
+                status=status.HTTP_200_OK
+            )
+    else:
+        id_token = request.data.get('idToken') or request.data.get('id_token')
 
     if not id_token:
         return Response(
@@ -698,7 +706,7 @@ def firebase_login(request):
 
     try:
         # Verify the Firebase ID Token using Firebase Admin SDK
-        decoded_token = firebase_auth.verify_id_token(id_token)
+        decoded_token = firebase_auth.verify_id_token(id_token, clock_skew_seconds=60)
         phone_number = decoded_token.get('phone_number')
 
         if not phone_number:
