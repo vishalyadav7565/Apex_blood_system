@@ -160,9 +160,16 @@ def login_hospital(request):
     print("===== LOGIN HIT =====")
     print(request.data)
 
+    data = request.data
+    if isinstance(data, dict) and '_content' in data:
+        import json
+        try:
+            data = json.loads(data['_content'])
+        except Exception as e:
+            print("JSON PARSE ERROR:", str(e))
 
     serializer = HospitalLoginSerializer(
-        data=request.data
+        data=data
     )
 
     if serializer.is_valid():
