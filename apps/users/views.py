@@ -271,42 +271,16 @@ def complete_profile(request):
 
     user = request.user
 
-    user.first_name = request.data.get(
-        'first_name',
-        ''
-    )
+    user.first_name = request.data.get('first_name', user.first_name)
+    user.last_name = request.data.get('last_name', user.last_name)
+    user.email = request.data.get('email', user.email)
+    user.age = request.data.get('age', user.age)
+    user.address = request.data.get('address', user.address)
+    user.blood_group = request.data.get('blood_group', user.blood_group)
+    user.pincode = request.data.get('pincode', user.pincode)
 
-    user.last_name = request.data.get(
-        'last_name',
-        ''
-    )
-    user.email = request.data.get(
-    'email',
-    user.email
-)
-
-    user.age = request.data.get(
-        'age'
-    )
-
-    user.address = request.data.get(
-        'address',
-        ''
-    )
-
-    user.blood_group = request.data.get(
-        'blood_group'
-    )
-
-    user.is_donor = request.data.get(
-        'is_donor',
-        False
-    )
-
-    user.pincode = request.data.get(
-        'pincode',
-        user.pincode
-    )
+    if 'is_donor' in request.data:
+        user.is_donor = request.data.get('is_donor')
 
     user.save()
 
