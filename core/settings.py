@@ -394,6 +394,12 @@ else:
         "https://api.yourdomain.com",
     ]
 
+    extra_cors = os.getenv("CORS_ALLOWED_ORIGINS")
+    if extra_cors:
+        for origin in extra_cors.split(","):
+            if origin.strip():
+                CORS_ALLOWED_ORIGINS.append(origin.strip())
+
 
 # =====================================================
 # CSRF TRUSTED ORIGINS
@@ -404,6 +410,12 @@ CSRF_TRUSTED_ORIGINS = [
 
     "https://api.yourdomain.com",
 ]
+
+extra_csrf = os.getenv("CSRF_TRUSTED_ORIGINS")
+if extra_csrf:
+    for origin in extra_csrf.split(","):
+        if origin.strip():
+            CSRF_TRUSTED_ORIGINS.append(origin.strip())
 
 
 # =====================================================
