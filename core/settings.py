@@ -396,6 +396,7 @@ else:
 
     extra_cors = os.getenv("CORS_ALLOWED_ORIGINS")
     if extra_cors:
+        extra_cors = extra_cors.replace("\r", "").replace("\n", "")
         for origin in extra_cors.split(","):
             if origin.strip():
                 CORS_ALLOWED_ORIGINS.append(origin.strip())
@@ -413,6 +414,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 extra_csrf = os.getenv("CSRF_TRUSTED_ORIGINS")
 if extra_csrf:
+    extra_csrf = extra_csrf.replace("\r", "").replace("\n", "")
     for origin in extra_csrf.split(","):
         if origin.strip():
             CSRF_TRUSTED_ORIGINS.append(origin.strip())
