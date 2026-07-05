@@ -21,7 +21,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/apexlifesaver/Backend || cd ~/Backend
+            cd ~/Apex_blood_system
             git pull origin ${{ github.ref_name }}
             docker compose -f docker-compose.prod.yml up -d --build
             docker compose -f docker-compose.prod.yml exec -T web python manage.py migrate
