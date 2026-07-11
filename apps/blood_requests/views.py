@@ -81,6 +81,37 @@ def create_request(request):
 
     channel_layer = get_channel_layer()
 
+    # 1. Emit Initial REQUEST_CREATED Update to User
+    async_to_sync(channel_layer.group_send)(
+        f"user_{req.user.id}",
+        {
+            "type": "send_update",
+            "data": {
+                "event": "REQUEST_CREATED",
+                "request_id": req.id,
+                "status": "pending",
+                "message": "Blood request created successfully."
+            }
+        }
+    )
+
+    # 2. Transition to broadcasting status
+    req.status = 'broadcasting'
+    req.save()
+
+    async_to_sync(channel_layer.group_send)(
+        f"user_{req.user.id}",
+        {
+            "type": "send_update",
+            "data": {
+                "event": "BROADCASTING",
+                "request_id": req.id,
+                "status": "broadcasting",
+                "message": "Broadcasting request to nearby hospitals..."
+            }
+        }
+    )
+
     hospitals = Hospital.objects.filter(
         is_verified=True
     )
@@ -108,11 +139,16 @@ def create_request(request):
 
             if distance <= 20:
 
-                notified_hospitals.append({
+                h_info = {
                     "id": hospital.id,
                     "name": hospital.name,
-                    "distance": round(distance, 2)
-                })
+                    "distance": round(distance, 2),
+                    "lat": hospital.latitude,
+                    "lng": hospital.longitude,
+                    "phone": hospital.phone,
+                    "address": hospital.address
+                }
+                notified_hospitals.append(h_info)
 
                 if getattr(hospital, "fcm_token", None):
                     send_push_notification(
@@ -172,6 +208,10 @@ def create_request(request):
                     }
                 )
 
+    # 3. Transition to searching_hospital status
+    req.status = 'searching_hospital'
+    req.save()
+
     # ======================================
     # ADMIN DASHBOARD UPDATE
     # ======================================
@@ -209,7 +249,7 @@ def create_request(request):
     )
 
     # ======================================
-    # USER APP UPDATE
+    # USER APP UPDATE (Searching Hospital with nearby list)
     # ======================================
 
     async_to_sync(
@@ -221,7 +261,7 @@ def create_request(request):
             "data": {
 
                 "event":
-                    "REQUEST_CREATED",
+                    "SEARCHING_HOSPITAL",
 
                 "request_id":
                     req.id,
@@ -230,7 +270,10 @@ def create_request(request):
                     req.status,
 
                 "message":
-                    "Blood request created successfully"
+                    f"Searching nearby hospitals within 20 km. Found {len(notified_hospitals)} hospitals.",
+
+                "nearby_hospitals":
+                    notified_hospitals
             }
         }
     )
@@ -436,7 +479,7 @@ def hospital_accept(request, id):
         id=id
     )
 
-    if req.status != 'pending':
+    if req.status not in ['pending', 'broadcasting', 'searching_hospital']:
 
         return Response(
             {
@@ -620,7 +663,7 @@ def reject_request(request, id):
         id=id
     )
 
-    if req.status != "pending":
+    if req.status not in ['pending', 'broadcasting', 'searching_hospital', 'searching_next_hospital']:
 
         return Response(
             {
@@ -660,7 +703,7 @@ def reject_request(request, id):
             status=404
         )
 
-    # Save hospital also for rejected request
+    # 1. Save hospital and transition status to rejected
     req.accepted_hospital = hospital
 
     req.status = "rejected"
@@ -684,7 +727,7 @@ def reject_request(request, id):
         )
 
     # ======================================
-    # WEBSOCKET UPDATE
+    # WEBSOCKET UPDATE (Rejection event)
     # ======================================
 
     channel_layer = get_channel_layer()
@@ -741,21 +784,125 @@ def reject_request(request, id):
         }
     )
 
+    # 2. Transition to searching_next_hospital
+    req.status = "searching_next_hospital"
+    req.save()
+
+    all_hospitals = Hospital.objects.filter(is_verified=True).exclude(id=hospital.id)
+    next_hospitals = []
+    for h in all_hospitals:
+        if h.latitude and h.longitude:
+            distance = geodesic(
+                (float(req.latitude), float(req.longitude)),
+                (float(h.latitude), float(h.longitude))
+            ).km
+            if distance <= 20:
+                next_hospitals.append({
+                    "id": h.id,
+                    "name": h.name,
+                    "distance": round(distance, 2),
+                    "lat": h.latitude,
+                    "lng": h.longitude,
+                    "phone": h.phone,
+                    "address": h.address
+                })
+
+    async_to_sync(
+        channel_layer.group_send
+    )(
+        f"user_{req.user.id}",
+        {
+            "type": "send_update",
+            "data": {
+                "event":
+                    "SEARCHING_NEXT_HOSPITAL",
+
+                "request_id":
+                    req.id,
+
+                "status":
+                    "searching_next_hospital",
+
+                "message":
+                    f"Searching next hospital... Found {len(next_hospitals)} alternatives.",
+
+                "nearby_hospitals":
+                    next_hospitals
+            }
+        }
+    )
+
+    # 3. Transition to searching_donor status (Fallback)
+    from .utils import COMPATIBLE_DONORS
+    compatible_groups = COMPATIBLE_DONORS.get(req.blood_group, [req.blood_group])
+    donors = User.objects.filter(
+        is_donor=True,
+        is_available=True,
+        blood_group__in=compatible_groups
+    )
+    nearby_donors = []
+    for donor in donors:
+        if donor.latitude and donor.longitude:
+            dist = geodesic(
+                (float(req.latitude), float(req.longitude)),
+                (float(donor.latitude), float(donor.longitude))
+            ).km
+            if dist <= 10:
+                nearby_donors.append({
+                    "id": donor.id,
+                    "name": (f"{donor.first_name} {donor.last_name}").strip() or donor.username,
+                    "distance": round(dist, 2),
+                    "lat": donor.latitude,
+                    "lng": donor.longitude,
+                    "phone": donor.phone,
+                    "blood_group": donor.blood_group
+                })
+
+    req.status = "searching_donor"
+    req.save()
+
+    # Notify donors in the background
+    notify_compatible_donors(req)
+
+    # Webhook Admin Update
+    async_to_sync(
+        channel_layer.group_send
+    )(
+        "requests",
+        {
+            "type": "send_update",
+            "data": {
+                "event": "SEARCHING_DONOR",
+                "request_id": req.id,
+                "status": req.status,
+                "blood_group": req.blood_group,
+            }
+        }
+    )
+
+    # Webhook User Update with nearby donors
+    async_to_sync(
+        channel_layer.group_send
+    )(
+        f"user_{req.user.id}",
+        {
+            "type": "send_update",
+            "data": {
+                "event": "SEARCHING_DONOR",
+                "request_id": req.id,
+                "status": req.status,
+                "message": "Hospitals busy. Searching nearby blood donors...",
+                "nearby_donors": nearby_donors
+            }
+        }
+    )
+
     return Response({
-
         "success": True,
-
-        "request_id":
-            req.id,
-
-        "status":
-            req.status,
-
-        "hospital":
-            hospital.name,
-
-        "message":
-            "Request rejected successfully"
+        "request_id": req.id,
+        "status": req.status,
+        "hospital": hospital.name,
+        "message": "Request rejected and transitioned to searching donors fallback."
     })
 # ==========================================
 # FALLBACK DONORS
@@ -766,7 +913,7 @@ def fallback_donors(request):
     now = timezone.now()
 
     expired = BloodRequest.objects.filter(
-        status='pending',
+        status__in=['pending', 'broadcasting', 'searching_hospital', 'searching_next_hospital'],
         expiry_time__lt=now
     )
 
@@ -774,7 +921,34 @@ def fallback_donors(request):
 
     updated_count = 0
 
+    from .utils import COMPATIBLE_DONORS
+
     for req in expired:
+
+        # Scan for compatible donors within 10 km
+        compatible_groups = COMPATIBLE_DONORS.get(req.blood_group, [req.blood_group])
+        donors = User.objects.filter(
+            is_donor=True,
+            is_available=True,
+            blood_group__in=compatible_groups
+        )
+        nearby_donors = []
+        for donor in donors:
+            if donor.latitude and donor.longitude:
+                dist = geodesic(
+                    (float(req.latitude), float(req.longitude)),
+                    (float(donor.latitude), float(donor.longitude))
+                ).km
+                if dist <= 10:
+                    nearby_donors.append({
+                        "id": donor.id,
+                        "name": (f"{donor.first_name} {donor.last_name}").strip() or donor.username,
+                        "distance": round(dist, 2),
+                        "lat": donor.latitude,
+                        "lng": donor.longitude,
+                        "phone": donor.phone,
+                        "blood_group": donor.blood_group
+                    })
 
         req.status = 'searching_donor'
         req.save()
@@ -813,7 +987,8 @@ def fallback_donors(request):
                     "event": "SEARCHING_DONOR",
                     "request_id": req.id,
                     "status": req.status,
-                    "message": "Searching nearby donors"
+                    "message": "Hospitals busy. Searching nearby blood donors...",
+                    "nearby_donors": nearby_donors
                 }
             }
         )
@@ -909,6 +1084,60 @@ def match_donors(request, id):
         "count": len(result),
         "data": result
     })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def complete_request(request, id):
+    req = get_object_or_404(BloodRequest, id=id)
+
+    # Allow completing if the request is accepted or searching_donor
+    if req.status not in ['accepted', 'searching_donor']:
+        return Response(
+            {
+                "error": f"Cannot complete request with status {req.status}"
+            },
+            status=400
+        )
+
+    req.status = "completed"
+    req.save()
+
+    channel_layer = get_channel_layer()
+
+    # Webhook Admin Update
+    async_to_sync(channel_layer.group_send)(
+        "requests",
+        {
+            "type": "send_update",
+            "data": {
+                "event": "REQUEST_COMPLETED",
+                "request_id": req.id,
+                "status": req.status,
+            }
+        }
+    )
+
+    # Webhook User Update
+    async_to_sync(channel_layer.group_send)(
+        f"user_{req.user.id}",
+        {
+            "type": "send_update",
+            "data": {
+                "event": "REQUEST_COMPLETED",
+                "request_id": req.id,
+                "status": req.status,
+                "message": "Blood request completed successfully."
+            }
+        }
+    )
+
+    return Response({
+        "success": True,
+        "request_id": req.id,
+        "status": req.status,
+        "message": "Request completed successfully."
+    })
+
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated

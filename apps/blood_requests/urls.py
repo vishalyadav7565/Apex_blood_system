@@ -6,6 +6,7 @@ from .views import (
     get_requests,
     get_request,
     hospital_accept,
+    complete_request,
     fallback_donors,
     match_donors,
     my_requests,
@@ -30,6 +31,8 @@ urlpatterns = [
     path('<int:id>/get/', get_request),
 
     path('<int:id>/accept/', hospital_accept),
+
+    path('<int:id>/complete/', complete_request),
 
     path('<int:id>/reject/', reject_request),
 

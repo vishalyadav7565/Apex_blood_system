@@ -173,7 +173,7 @@ def dashboard(request):
         "pending_requests":
             BloodRequest.objects.filter(
 
-                status='pending'
+                status__in=['pending', 'broadcasting', 'searching_hospital', 'searching_next_hospital']
             ).count(),
     })
 
@@ -460,7 +460,7 @@ def analytics_dashboard(request):
     total_requests = BloodRequest.objects.count()
 
     pending = BloodRequest.objects.filter(
-        status="pending"
+        status__in=["pending", "broadcasting", "searching_hospital"]
     ).count()
 
     accepted = BloodRequest.objects.filter(
@@ -472,7 +472,11 @@ def analytics_dashboard(request):
     ).count()
 
     searching = BloodRequest.objects.filter(
-        status="searching_donor"
+        status__in=["searching_next_hospital", "searching_donor"]
+    ).count()
+
+    completed = BloodRequest.objects.filter(
+        status="completed"
     ).count()
 
     today_requests = BloodRequest.objects.filter(
@@ -505,6 +509,7 @@ def analytics_dashboard(request):
         "accepted_requests": accepted,
         "rejected_requests": rejected,
         "searching_requests": searching,
+        "completed_requests": completed,
         "today_requests": today_requests,
         "weekly_requests": weekly_requests,
         "monthly_requests": monthly_requests,
