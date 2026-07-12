@@ -295,6 +295,9 @@ def create_request(request):
                     req.id,
 
                 "status":
+                    "broadcasting",
+
+                "detailed_status":
                     req.status,
 
                 "message":
@@ -687,7 +690,9 @@ def hospital_accept(request, id):
                 "event": "REQUEST_ACCEPTED",
                 "request_id": req.id,
                 "status": "accepted",
+                "detailed_status": "accepted",
                 "hospital": h.name if h else None,
+                "hospital_name": h.name if h else None,
                 "hospital_phone": h.phone if h else None,
                 "hospital_email": h.email if h else None,
                 "hospital_address": h.address if h else None,
@@ -695,6 +700,7 @@ def hospital_accept(request, id):
                 "hospital_longitude": h.longitude if h else None,
                 "hospital_pincode": h.pincode if h else None,
                 "hospital_details": h_data,
+                "accepted_hospital": h_data,
                 "message": f"Your request has been accepted by {h.name if h else 'a hospital'}."
             }
         }
@@ -950,6 +956,9 @@ def reject_request(request, id):
                     req.id,
 
                 "status":
+                    "broadcasting",
+
+                "detailed_status":
                     "searching_next_hospital",
 
                 "message":
@@ -1019,7 +1028,8 @@ def reject_request(request, id):
             "data": {
                 "event": "SEARCHING_DONOR",
                 "request_id": req.id,
-                "status": req.status,
+                "status": "broadcasting",
+                "detailed_status": req.status,
                 "message": "Hospitals busy. Searching nearby blood donors...",
                 "nearby_donors": nearby_donors
             }
@@ -1115,7 +1125,8 @@ def fallback_donors(request):
                 "data": {
                     "event": "SEARCHING_DONOR",
                     "request_id": req.id,
-                    "status": req.status,
+                    "status": "broadcasting",
+                    "detailed_status": req.status,
                     "message": "Hospitals busy. Searching nearby blood donors...",
                     "nearby_donors": nearby_donors
                 }

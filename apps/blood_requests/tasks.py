@@ -70,7 +70,8 @@ def fallback_requests():
                 "data": {
                     "event": "SEARCHING_DONOR",
                     "request_id": req.id,
-                    "status": req.status,
+                    "status": "broadcasting",
+                    "detailed_status": req.status,
                     "message": "Hospitals busy. Searching nearby blood donors...",
                     "nearby_donors": nearby_donors
                 }
