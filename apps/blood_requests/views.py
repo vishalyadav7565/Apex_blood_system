@@ -211,7 +211,23 @@ def create_request(request):
                             "lng":
                                 req.longitude,
 
+                            "status": "pending",
+
+                            "detailed_status": "searching_hospital",
+
                             "document": (
+                                request.build_absolute_uri(req.prescription.url)
+                                if req.prescription
+                                else None
+                            ),
+
+                            "document_url": (
+                                request.build_absolute_uri(req.prescription.url)
+                                if req.prescription
+                                else None
+                            ),
+
+                            "prescription": (
                                 request.build_absolute_uri(req.prescription.url)
                                 if req.prescription
                                 else None
@@ -368,6 +384,9 @@ def get_requests(request):
                 req.blood_group,
 
             "status":
+                "pending" if req.status in ["searching_hospital", "searching_next_hospital"] else req.status,
+
+            "detailed_status":
                 req.status,
 
             "latitude":
@@ -377,6 +396,16 @@ def get_requests(request):
                 req.longitude,
 
             "document":
+                request.build_absolute_uri(req.prescription.url)
+                if req.prescription
+                else None,
+
+            "document_url":
+                request.build_absolute_uri(req.prescription.url)
+                if req.prescription
+                else None,
+
+            "prescription":
                 request.build_absolute_uri(req.prescription.url)
                 if req.prescription
                 else None,
@@ -467,6 +496,9 @@ def get_request(request, id):
             req.blood_group,
 
         "status":
+            "pending" if req.status in ["searching_hospital", "searching_next_hospital"] else req.status,
+
+        "detailed_status":
             req.status,
 
         "latitude":
@@ -476,6 +508,16 @@ def get_request(request, id):
             req.longitude,
 
         "document":
+            request.build_absolute_uri(req.prescription.url)
+            if req.prescription
+            else None,
+
+        "document_url":
+            request.build_absolute_uri(req.prescription.url)
+            if req.prescription
+            else None,
+
+        "prescription":
             request.build_absolute_uri(req.prescription.url)
             if req.prescription
             else None,
@@ -873,7 +915,19 @@ def reject_request(request, id):
                             "distance": round(distance, 2),
                             "lat": req.latitude,
                             "lng": req.longitude,
+                            "status": "pending",
+                            "detailed_status": "searching_next_hospital",
                             "document": (
+                                request.build_absolute_uri(req.prescription.url)
+                                if req.prescription
+                                else None
+                            ),
+                            "document_url": (
+                                request.build_absolute_uri(req.prescription.url)
+                                if req.prescription
+                                else None
+                            ),
+                            "prescription": (
                                 request.build_absolute_uri(req.prescription.url)
                                 if req.prescription
                                 else None
