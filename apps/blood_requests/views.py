@@ -178,13 +178,25 @@ def create_request(request):
                             "patient_name":
                                 req.user_name,
 
+                            "user_name":
+                                req.user_name,
+
                             "patient_phone":
+                                req.user_phone,
+
+                            "user_phone":
                                 req.user_phone,
 
                             "patient_email":
                                 req.user_email,
 
+                            "user_email":
+                                req.user_email,
+
                             "patient_address":
+                                req.user_address,
+
+                            "user_address":
                                 req.user_address,
 
                             "blood_group":
@@ -330,13 +342,25 @@ def get_requests(request):
             "patient_name":
                 req.user_name,
 
+            "user_name":
+                req.user_name,
+
             "patient_phone":
+                req.user_phone,
+
+            "user_phone":
                 req.user_phone,
 
             "patient_email":
                 req.user_email,
 
+            "user_email":
+                req.user_email,
+
             "patient_address":
+                req.user_address,
+
+            "user_address":
                 req.user_address,
 
             # Request Details
@@ -418,13 +442,25 @@ def get_request(request, id):
         "patient_name":
             req.user_name,
 
+        "user_name":
+            req.user_name,
+
         "patient_phone":
+            req.user_phone,
+
+        "user_phone":
             req.user_phone,
 
         "patient_email":
             req.user_email,
 
+        "user_email":
+            req.user_email,
+
         "patient_address":
+            req.user_address,
+
+        "user_address":
             req.user_address,
 
         "blood_group":
@@ -806,6 +842,45 @@ def reject_request(request, id):
                     "phone": h.phone,
                     "address": h.address
                 })
+
+                if getattr(h, "fcm_token", None):
+                    send_push_notification(
+                        token=h.fcm_token,
+                        title="New Urgent Blood Request!",
+                        body=f"Request for {req.blood_group} blood within {round(distance, 2)} km.",
+                        data={
+                            "event": "NEW_REQUEST",
+                            "request_id": str(req.id)
+                        }
+                    )
+
+                async_to_sync(channel_layer.group_send)(
+                    f"hospital_{h.id}",
+                    {
+                        "type": "send_update",
+                        "data": {
+                            "event": "NEW_REQUEST",
+                            "request_id": req.id,
+                            "patient_name": req.user_name,
+                            "user_name": req.user_name,
+                            "patient_phone": req.user_phone,
+                            "user_phone": req.user_phone,
+                            "patient_email": req.user_email,
+                            "user_email": req.user_email,
+                            "patient_address": req.user_address,
+                            "user_address": req.user_address,
+                            "blood_group": req.blood_group,
+                            "distance": round(distance, 2),
+                            "lat": req.latitude,
+                            "lng": req.longitude,
+                            "document": (
+                                req.prescription.url
+                                if req.prescription
+                                else None
+                            ),
+                        }
+                    }
+                )
 
     async_to_sync(
         channel_layer.group_send
