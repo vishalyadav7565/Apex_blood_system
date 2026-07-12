@@ -212,7 +212,7 @@ def create_request(request):
                                 req.longitude,
 
                             "document": (
-                                req.prescription.url
+                                request.build_absolute_uri(req.prescription.url)
                                 if req.prescription
                                 else None
                             ),
@@ -377,7 +377,7 @@ def get_requests(request):
                 req.longitude,
 
             "document":
-                req.prescription.url
+                request.build_absolute_uri(req.prescription.url)
                 if req.prescription
                 else None,
 
@@ -476,7 +476,7 @@ def get_request(request, id):
             req.longitude,
 
         "document":
-            req.prescription.url
+            request.build_absolute_uri(req.prescription.url)
             if req.prescription
             else None,
 
@@ -874,7 +874,7 @@ def reject_request(request, id):
                             "lat": req.latitude,
                             "lng": req.longitude,
                             "document": (
-                                req.prescription.url
+                                request.build_absolute_uri(req.prescription.url)
                                 if req.prescription
                                 else None
                             ),
