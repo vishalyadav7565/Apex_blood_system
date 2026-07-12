@@ -29,6 +29,8 @@ urlpatterns = [
     path('fallback/', fallback_donors),
 
     path('<int:id>/get/', get_request),
+    path('detail/<int:id>/', get_request),
+    path('detail/<int:id>', get_request),
 
     path('<int:id>/accept/', hospital_accept),
 
