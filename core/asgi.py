@@ -36,10 +36,18 @@ application = ProtocolTypeRouter({
             "ws/hospital/<int:hospital_id>/",
             RequestConsumer.as_asgi()
         ),
+        path(
+            "ws/requests/hospital/<int:hospital_id>/",
+            RequestConsumer.as_asgi()
+        ),
 
         # User specific socket
         path(
             "ws/user/<int:user_id>/",
+            RequestConsumer.as_asgi()
+        ),
+        path(
+            "ws/requests/user/<int:user_id>/",
             RequestConsumer.as_asgi()
         ),
 
