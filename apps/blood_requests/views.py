@@ -29,6 +29,69 @@ def format_local_time(dt):
         return dt.isoformat() if hasattr(dt, 'isoformat') else str(dt)
 
 
+from django.core.cache import cache
+
+def get_nearby_hospitals_list(req):
+    cache_key = f"nearby_hospitals_{req.id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    hospitals = Hospital.objects.filter(is_verified=True)
+    notified_hospitals = []
+    for hospital in hospitals:
+        if hospital.latitude and hospital.longitude:
+            distance = geodesic(
+                (float(req.latitude), float(req.longitude)),
+                (float(hospital.latitude), float(hospital.longitude))
+            ).km
+            if distance <= 20:
+                notified_hospitals.append({
+                    "id": hospital.id,
+                    "name": hospital.name,
+                    "distance": round(distance, 2),
+                    "lat": hospital.latitude,
+                    "lng": hospital.longitude,
+                    "phone": hospital.phone,
+                    "address": hospital.address
+                })
+    cache.set(cache_key, notified_hospitals, timeout=600)
+    return notified_hospitals
+
+def get_nearby_donors_list(req):
+    cache_key = f"nearby_donors_{req.id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    from .utils import COMPATIBLE_DONORS
+    compatible_groups = COMPATIBLE_DONORS.get(req.blood_group, [req.blood_group])
+    donors = User.objects.filter(
+        is_donor=True,
+        is_available=True,
+        blood_group__in=compatible_groups
+    )
+    nearby_donors = []
+    for donor in donors:
+        if donor.latitude and donor.longitude:
+            dist = geodesic(
+                (float(req.latitude), float(req.longitude)),
+                (float(donor.latitude), float(donor.longitude))
+            ).km
+            if dist <= 10:
+                nearby_donors.append({
+                    "id": donor.id,
+                    "name": (f"{donor.first_name} {donor.last_name}").strip() or donor.username,
+                    "distance": round(dist, 2),
+                    "lat": donor.latitude,
+                    "lng": donor.longitude,
+                    "phone": donor.phone,
+                    "blood_group": donor.blood_group
+                })
+    cache.set(cache_key, nearby_donors, timeout=600)
+    return nearby_donors
+
+
 # ==========================================
 # CREATE REQUEST
 # ==========================================
@@ -547,6 +610,16 @@ def get_request(request, id):
             "address": h.address, "latitude": h.latitude, "longitude": h.longitude,
             "lat": h.latitude, "lng": h.longitude, "pincode": h.pincode
         } if h else None,
+        "nearby_hospitals": (
+            get_nearby_hospitals_list(req)
+            if req.status in ["searching_hospital", "searching_next_hospital"]
+            else []
+        ),
+        "nearby_donors": (
+            get_nearby_donors_list(req)
+            if req.status == "searching_donor"
+            else []
+        ),
     })
 
 # ==========================================
@@ -1387,7 +1460,14 @@ def current_request(request):
     return Response({
         "id": req.id,
         "blood_group": req.blood_group,
-        "status": req.status,
+        "status": (
+            "broadcasting"
+            if req.status in ["searching_hospital", "searching_next_hospital", "searching_donor"]
+            else req.status
+        ),
+        "detailed_status": req.status,
+        "latitude": req.latitude,
+        "longitude": req.longitude,
         "hospital_name": h.name if h else None,
         "hospital_phone": h.phone if h else None,
         "hospital_email": h.email if h else None,
@@ -1406,5 +1486,15 @@ def current_request(request):
             )
             if req.prescription
             else None
-        )
+        ),
+        "nearby_hospitals": (
+            get_nearby_hospitals_list(req)
+            if req.status in ["searching_hospital", "searching_next_hospital"]
+            else []
+        ),
+        "nearby_donors": (
+            get_nearby_donors_list(req)
+            if req.status == "searching_donor"
+            else []
+        ),
     })
