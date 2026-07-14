@@ -53,6 +53,12 @@ class BloodRequest(models.Model):
         default='pending'
     )
 
+    otp = models.CharField(
+        max_length=6,
+        blank=True,
+        null=True
+    )
+
     assigned_to = models.CharField(
         max_length=30,
         blank=True,

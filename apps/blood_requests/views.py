@@ -99,6 +99,21 @@ def get_nearby_donors_list(req):
 @permission_classes([IsAuthenticated])
 def create_request(request):
 
+    # Check if there is an active request (any status other than completed)
+    active_req = BloodRequest.objects.filter(
+        user=request.user
+    ).exclude(status='completed').first()
+
+    if active_req:
+        return Response(
+            {
+                "success": False,
+                "error": "You already have an active blood request. Please complete or cancel it first.",
+                "active_request_id": active_req.id
+            },
+            status=400
+        )
+
     prescription = request.FILES.get(
         'prescription'
     )
@@ -620,6 +635,11 @@ def get_request(request, id):
             if req.status == "searching_donor"
             else []
         ),
+        "otp": (
+            req.otp
+            if request.user.is_authenticated and request.user == req.user
+            else None
+        ),
     })
 
 # ==========================================
@@ -676,6 +696,8 @@ def hospital_accept(request, id):
                 status=404
             )
 
+    import random
+    req.otp = f"{random.randint(1000, 9999)}"
     req.save()
     
 
@@ -717,6 +739,7 @@ def hospital_accept(request, id):
                 "hospital_pincode": h.pincode if h else None,
                 "hospital_details": h_data,
                 "accepted_hospital": h_data,
+                "otp": req.otp,
                 "message": f"Your request has been accepted by {h.name if h else 'a hospital'}."
             }
         )
@@ -774,6 +797,7 @@ def hospital_accept(request, id):
                 "hospital_pincode": h.pincode if h else None,
                 "hospital_details": h_data,
                 "accepted_hospital": h_data,
+                "otp": req.otp,
                 "message": f"Your request has been accepted by {h.name if h else 'a hospital'}."
             }
         }
@@ -791,6 +815,9 @@ def hospital_accept(request, id):
 
         "status":
             req.status,
+
+        "otp":
+            req.otp,
 
         "hospital":
             h.name
@@ -1312,6 +1339,20 @@ def complete_request(request, id):
             status=400
         )
 
+    # Verify OTP
+    otp = request.data.get("otp")
+    if not otp:
+        return Response(
+            {"error": "OTP is required to complete the request"},
+            status=400
+        )
+
+    if req.otp and req.otp != str(otp):
+        return Response(
+            {"error": "Invalid OTP. Please try again."},
+            status=400
+        )
+
     req.status = "completed"
     req.save()
 
@@ -1497,4 +1538,5 @@ def current_request(request):
             if req.status == "searching_donor"
             else []
         ),
+        "otp": req.otp,
     })
