@@ -1326,7 +1326,6 @@ def match_donors(request, id):
     })
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
 def complete_request(request, id):
     req = get_object_or_404(BloodRequest, id=id)
 
