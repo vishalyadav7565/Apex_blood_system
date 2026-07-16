@@ -31,6 +31,17 @@ def format_local_time(dt):
 
 from django.core.cache import cache
 
+def get_prescription_url(req, request):
+    if not req or not req.prescription:
+        return None
+    url_str = str(req.prescription)
+    if url_str.startswith('http://') or url_str.startswith('https://'):
+        return url_str
+    try:
+        return request.build_absolute_uri(req.prescription.url)
+    except Exception:
+        return url_str
+
 def get_nearby_hospitals_list(req):
     cache_key = f"nearby_hospitals_{req.id}"
     cached = cache.get(cache_key)
@@ -114,8 +125,10 @@ def create_request(request):
             status=400
         )
 
-    prescription = request.FILES.get(
-        'prescription'
+    prescription = (
+        request.FILES.get('prescription') or
+        request.data.get('prescription') or
+        request.data.get('prescription_url')
     )
 
     req = BloodRequest.objects.create(
@@ -293,23 +306,11 @@ def create_request(request):
 
                             "detailed_status": "searching_hospital",
 
-                            "document": (
-                                request.build_absolute_uri(req.prescription.url)
-                                if req.prescription
-                                else None
-                            ),
+                            "document": get_prescription_url(req, request),
 
-                            "document_url": (
-                                request.build_absolute_uri(req.prescription.url)
-                                if req.prescription
-                                else None
-                            ),
+                            "document_url": get_prescription_url(req, request),
 
-                            "prescription": (
-                                request.build_absolute_uri(req.prescription.url)
-                                if req.prescription
-                                else None
-                            ),
+                            "prescription": get_prescription_url(req, request),
                         }
                     }
                 )
@@ -477,19 +478,13 @@ def get_requests(request):
                 req.longitude,
 
             "document":
-                request.build_absolute_uri(req.prescription.url)
-                if req.prescription
-                else None,
+                get_prescription_url(req, request),
 
             "document_url":
-                request.build_absolute_uri(req.prescription.url)
-                if req.prescription
-                else None,
+                get_prescription_url(req, request),
 
             "prescription":
-                request.build_absolute_uri(req.prescription.url)
-                if req.prescription
-                else None,
+                get_prescription_url(req, request),
 
             "created_at":
                 format_local_time(req.created_at),
@@ -589,19 +584,13 @@ def get_request(request, id):
             req.longitude,
 
         "document":
-            request.build_absolute_uri(req.prescription.url)
-            if req.prescription
-            else None,
+            get_prescription_url(req, request),
 
         "document_url":
-            request.build_absolute_uri(req.prescription.url)
-            if req.prescription
-            else None,
+            get_prescription_url(req, request),
 
         "prescription":
-            request.build_absolute_uri(req.prescription.url)
-            if req.prescription
-            else None,
+            get_prescription_url(req, request),
 
         "created_at":
             format_local_time(req.created_at),
@@ -1023,21 +1012,9 @@ def reject_request(request, id):
                             "lng": req.longitude,
                             "status": "pending",
                             "detailed_status": "searching_next_hospital",
-                            "document": (
-                                request.build_absolute_uri(req.prescription.url)
-                                if req.prescription
-                                else None
-                            ),
-                            "document_url": (
-                                request.build_absolute_uri(req.prescription.url)
-                                if req.prescription
-                                else None
-                            ),
-                            "prescription": (
-                                request.build_absolute_uri(req.prescription.url)
-                                if req.prescription
-                                else None
-                            ),
+                            "document": get_prescription_url(req, request),
+                            "document_url": get_prescription_url(req, request),
+                            "prescription": get_prescription_url(req, request),
                         }
                     }
                 )
@@ -1423,12 +1400,7 @@ def my_requests(request):
 
                 prescription_url = None
 
-                if req.prescription:
-                    prescription_url = (
-                        request.build_absolute_uri(
-                            req.prescription.url
-                        )
-                    )
+                prescription_url = get_prescription_url(req, request)
 
                 h = req.accepted_hospital
                 data.append({
@@ -1520,13 +1492,7 @@ def current_request(request):
         "hospital_details": h_data,
         "accepted_hospital": h_data,
         "created_at": format_local_time(req.created_at),
-        "prescription": (
-            request.build_absolute_uri(
-                req.prescription.url
-            )
-            if req.prescription
-            else None
-        ),
+        "prescription": get_prescription_url(req, request),
         "nearby_hospitals": (
             get_nearby_hospitals_list(req)
             if req.status in ["searching_hospital", "searching_next_hospital"]
