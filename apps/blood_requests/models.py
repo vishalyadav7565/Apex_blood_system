@@ -44,6 +44,7 @@ class BloodRequest(models.Model):
 
     prescription = models.FileField(
         upload_to='prescriptions/',
+        max_length=500,
         null=True,
         blank=True
     )
