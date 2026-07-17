@@ -131,35 +131,33 @@ def create_request(request):
         request.data.get('prescription_url')
     )
 
+    try:
+        blood_units = int(request.data.get('blood_units') or 1)
+    except (ValueError, TypeError):
+        blood_units = 1
+
     req = BloodRequest.objects.create(
-
         user=request.user,
-
         user_name=(
             f"{request.user.first_name} "
             f"{request.user.last_name}"
         ).strip() or request.user.username,
-
         user_phone=request.user.phone,
-
         user_email=request.user.email,
-
         user_address=request.user.address,
-
         blood_group=request.data.get(
             'blood_group'
         ),
-
         latitude=request.data.get(
             'latitude'
         ),
-
         longitude=request.data.get(
             'longitude'
         ),
-
         prescription=prescription,
-
+        patient_name=request.data.get('patient_name'),
+        blood_component=request.data.get('blood_component') or request.data.get('component'),
+        blood_units=blood_units,
         status='pending'
     )
 
@@ -311,6 +309,12 @@ def create_request(request):
                             "document_url": get_prescription_url(req, request),
 
                             "prescription": get_prescription_url(req, request),
+
+                            "patient_name": req.patient_name,
+
+                            "blood_component": req.blood_component,
+
+                            "blood_units": req.blood_units,
                         }
                     }
                 )
@@ -338,10 +342,19 @@ def create_request(request):
                     req.id,
 
                 "patient_name":
+                    req.patient_name,
+
+                "user_name":
                     req.user_name,
 
                 "blood_group":
                     req.blood_group,
+
+                "blood_component":
+                    req.blood_component,
+
+                "blood_units":
+                    req.blood_units,
 
                 "status":
                     req.status,
@@ -438,7 +451,7 @@ def get_requests(request):
 
             # Patient Details
             "patient_name":
-                req.user_name,
+                req.patient_name,
 
             "user_name":
                 req.user_name,
@@ -464,6 +477,12 @@ def get_requests(request):
             # Request Details
             "blood_group":
                 req.blood_group,
+
+            "blood_component":
+                req.blood_component,
+
+            "blood_units":
+                req.blood_units,
 
             "status":
                 "pending" if req.status in ["searching_hospital", "searching_next_hospital"] else req.status,
@@ -545,7 +564,7 @@ def get_request(request, id):
         "id": req.id,
 
         "patient_name":
-            req.user_name,
+            req.patient_name,
 
         "user_name":
             req.user_name,
@@ -570,6 +589,12 @@ def get_request(request, id):
 
         "blood_group":
             req.blood_group,
+
+        "blood_component":
+            req.blood_component,
+
+        "blood_units":
+            req.blood_units,
 
         "status":
             "pending" if req.status in ["searching_hospital", "searching_next_hospital"] else req.status,
@@ -1406,6 +1431,8 @@ def my_requests(request):
                 data.append({
                     "id": req.id,
                     "blood_group": req.blood_group,
+                    "blood_component": req.blood_component,
+                    "blood_units": req.blood_units,
                     "status": req.status,
                     "hospital_name": h.name if h else None,
                     "hospital_phone": h.phone if h else None,
@@ -1414,6 +1441,7 @@ def my_requests(request):
                     "hospital_latitude": h.latitude if h else None,
                     "hospital_longitude": h.longitude if h else None,
                     "hospital_pincode": h.pincode if h else None,
+                    "patient_name": req.patient_name,
                     "user_name": req.user_name,
                     "user_phone": req.user_phone,
                     "created_at": format_local_time(req.created_at),
@@ -1471,7 +1499,11 @@ def current_request(request):
 
     return Response({
         "id": req.id,
+        "patient_name": req.patient_name,
+        "user_name": req.user_name,
         "blood_group": req.blood_group,
+        "blood_component": req.blood_component,
+        "blood_units": req.blood_units,
         "status": (
             "broadcasting"
             if req.status in ["searching_hospital", "searching_next_hospital", "searching_donor"]

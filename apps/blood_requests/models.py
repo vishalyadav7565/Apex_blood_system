@@ -49,6 +49,22 @@ class BloodRequest(models.Model):
         blank=True
     )
 
+    patient_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True
+    )
+
+    blood_component = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True
+    )
+
+    blood_units = models.IntegerField(
+        default=1
+    )
+
     status = models.CharField(
         max_length=30,
         default='pending'
