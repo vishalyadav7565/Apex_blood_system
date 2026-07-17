@@ -10,7 +10,8 @@ from .views import (
     fallback_donors,
     match_donors,
     my_requests,
-    reject_request
+    reject_request,
+    cancel_request
 )
 
 urlpatterns = [
@@ -39,5 +40,7 @@ urlpatterns = [
     path('<int:id>/reject/', reject_request),
 
     path('<int:id>/donors/', match_donors),
+
+    path('<int:id>/cancel/', cancel_request),
 ]
 

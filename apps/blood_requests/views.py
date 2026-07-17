@@ -110,10 +110,10 @@ def get_nearby_donors_list(req):
 @permission_classes([IsAuthenticated])
 def create_request(request):
 
-    # Check if there is an active request (any status other than completed)
+    # Check if there is an active request (any status other than completed, cancelled, or rejected)
     active_req = BloodRequest.objects.filter(
         user=request.user
-    ).exclude(status='completed').first()
+    ).exclude(status__in=['completed', 'cancelled', 'rejected']).first()
 
     if active_req:
         return Response(
@@ -1536,4 +1536,72 @@ def current_request(request):
             else []
         ),
         "otp": req.otp,
+    })
+
+
+#==========================================
+# CANCEL REQUEST
+#==========================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cancel_request(request, id):
+    req = get_object_or_404(BloodRequest, id=id)
+
+    # Verify ownership
+    if req.user != request.user:
+        return Response(
+            {"error": "You do not have permission to cancel this request"},
+            status=403
+        )
+
+    # Allow cancelling only if not in final statuses
+    if req.status in ['completed', 'rejected', 'cancelled']:
+        return Response(
+            {"error": f"Cannot cancel request with status {req.status}"},
+            status=400
+        )
+
+    req.status = "cancelled"
+    req.save()
+
+    channel_layer = get_channel_layer()
+
+    # Webhook Admin Update
+    try:
+        async_to_sync(channel_layer.group_send)(
+            "requests",
+            {
+                "type": "send_update",
+                "data": {
+                    "event": "REQUEST_CANCELLED",
+                    "request_id": req.id,
+                    "status": req.status,
+                }
+            }
+        )
+    except Exception as e:
+        print("Error sending admin cancel update:", e)
+
+    # Webhook User Update
+    try:
+        async_to_sync(channel_layer.group_send)(
+            f"user_{req.user.id}",
+            {
+                "type": "send_update",
+                "data": {
+                    "event": "REQUEST_CANCELLED",
+                    "request_id": req.id,
+                    "status": req.status,
+                    "message": "Blood request cancelled successfully."
+                }
+            }
+        )
+    except Exception as e:
+        print("Error sending user cancel update:", e)
+
+    return Response({
+        "success": True,
+        "request_id": req.id,
+        "status": req.status,
+        "message": "Request cancelled successfully."
     })
