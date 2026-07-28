@@ -9,7 +9,7 @@ services:
       FIREBASE_CREDENTIALS: /app/firebase-service-account.json
       POSTGRES_DB: blood_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: Apex@2026
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:

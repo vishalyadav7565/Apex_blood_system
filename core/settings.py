@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta
 from celery.schedules import crontab
+from apps.notifications.firebase import *
 
 
 
@@ -76,8 +77,6 @@ INSTALLED_APPS = [
     'apps.blood_requests',
 
     'apps.admin_panel',
-
-    'apps.notifications',
 ]
 
 
@@ -187,22 +186,21 @@ DATABASES = {
 # =====================================================
 # REDIS CACHE
 # =====================================================
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-
-# For Cache (use database 1 if URL targets database 0)
-if REDIS_URL.endswith('/0'):
-    cache_redis_url = REDIS_URL[:-2] + '/1'
-elif '/' not in REDIS_URL.split('://')[-1]:
-    cache_redis_url = REDIS_URL.rstrip('/') + '/1'
-else:
-    cache_redis_url = REDIS_URL
-
 CACHES = {
+
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": cache_redis_url,
+
+        "BACKEND":
+            "django_redis.cache.RedisCache",
+
+        "LOCATION":
+            "redis://redis:6379/1",
+
         "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+
+            "CLIENT_CLASS":
+                "django_redis.client.DefaultClient",
+
         }
     }
 }
@@ -211,20 +209,11 @@ CACHES = {
 # =====================================================
 # CHANNELS (WEBSOCKET)
 # =====================================================
-from urllib.parse import urlparse
-try:
-    parsed_redis = urlparse(REDIS_URL)
-    redis_host = parsed_redis.hostname or "redis"
-    redis_port = parsed_redis.port or 6379
-except Exception:
-    redis_host = "redis"
-    redis_port = 6379
-
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(redis_host, redis_port)],
+            "hosts": [("redis", 6379)],
             "capacity": 1500,
             "expiry": 60,
         },
@@ -351,9 +340,9 @@ SIMPLE_JWT = {
 # =====================================================
 # CELERY
 # =====================================================
-CELERY_BROKER_URL = REDIS_URL
+CELERY_BROKER_URL = "redis://redis:6379/0"
 
-CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_RESULT_BACKEND = "redis://redis:6379/0"
 
 CELERY_ACCEPT_CONTENT = ['json']
 
@@ -394,13 +383,6 @@ else:
         "https://api.yourdomain.com",
     ]
 
-    extra_cors = os.getenv("CORS_ALLOWED_ORIGINS")
-    if extra_cors:
-        extra_cors = extra_cors.replace("\r", "").replace("\n", "")
-        for origin in extra_cors.split(","):
-            if origin.strip():
-                CORS_ALLOWED_ORIGINS.append(origin.strip())
-
 
 # =====================================================
 # CSRF TRUSTED ORIGINS
@@ -411,13 +393,6 @@ CSRF_TRUSTED_ORIGINS = [
 
     "https://api.yourdomain.com",
 ]
-
-extra_csrf = os.getenv("CSRF_TRUSTED_ORIGINS")
-if extra_csrf:
-    extra_csrf = extra_csrf.replace("\r", "").replace("\n", "")
-    for origin in extra_csrf.split(","):
-        if origin.strip():
-            CSRF_TRUSTED_ORIGINS.append(origin.strip())
 
 
 # =====================================================
