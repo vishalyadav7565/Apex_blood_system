@@ -9,8 +9,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-blood_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      AMBULANCE_DB_NAME: ${AMBULANCE_DB_NAME:-ambulance_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
     ports:
       - "127.0.0.1:5432:5432"
     deploy:
@@ -35,7 +37,7 @@ services:
       dockerfile: Dockerfile
     container_name: django_app
     restart: always
-    command: daphne -b 0.0.0.0 -p 8000 core.asgi:application
+    command: sh -c "python manage.py migrate && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
     volumes:
       - ./staticfiles:/app/staticfiles
       - ./media:/app/media

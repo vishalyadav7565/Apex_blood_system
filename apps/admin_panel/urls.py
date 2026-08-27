@@ -15,6 +15,11 @@ from .views import (
     send_custom_notification,
     all_support_tickets,
     update_support_status,
+    get_ambulance_owners,
+    verify_ambulance_owner,
+    get_ambulance_drivers,
+    verify_ambulance_driver,
+    get_ambulances,
 )
 
 urlpatterns = [
@@ -82,5 +87,25 @@ urlpatterns = [
     path(
         "support/<int:id>/status/",
         update_support_status
+    ),
+    path(
+        "ambulance-owners/",
+        get_ambulance_owners
+    ),
+    path(
+        "ambulance-owners/<int:id>/verify/",
+        verify_ambulance_owner
+    ),
+    path(
+        "ambulance-drivers/",
+        get_ambulance_drivers
+    ),
+    path(
+        "ambulance-drivers/<int:id>/verify/",
+        verify_ambulance_driver
+    ),
+    path(
+        "ambulances/",
+        get_ambulances
     ),
 ]

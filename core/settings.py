@@ -7,9 +7,6 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta
 from celery.schedules import crontab
-from apps.notifications.firebase import *
-
-
 
 
 # =====================================================
@@ -18,6 +15,8 @@ from apps.notifications.firebase import *
 BASE_DIR = Path(__file__).resolve().parent.parent
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+from apps.notifications.firebase import *
 
 
 # =====================================================
@@ -68,15 +67,39 @@ INSTALLED_APPS = [
     'corsheaders',
 
     'channels',
+]
+
+try:
+    import drf_spectacular
+    INSTALLED_APPS.append('drf_spectacular')
+except ImportError:
+    pass
+
+try:
+    import drf_yasg
+    INSTALLED_APPS.append('drf_yasg')
+except ImportError:
+    pass
+
+INSTALLED_APPS += [
 
     # local apps
     'apps.users',
-
     'apps.hospitals',
-
     'apps.blood_requests',
-
     'apps.admin_panel',
+
+    # ambulance modular apps
+    'ambulance_apps.owners',
+    'ambulance_apps.ambulance',
+    'ambulance_apps.drivers',
+    'ambulance_apps.trips',
+    'ambulance_apps.tracking',
+    'ambulance_apps.notifications',
+    'ambulance_apps.documents',
+    'ambulance_apps.payments',
+    'ambulance_apps.analytics',
+    'ambulance_apps.support',
 ]
 
 
@@ -143,82 +166,104 @@ TEMPLATES = [
 # =====================================================
 # DATABASE
 # =====================================================
-DATABASES = {
+import socket
 
-    'default': {
+def resolve_db_host(env_var_name, default_host='db'):
+    raw_host = os.getenv(env_var_name, default_host)
+    if raw_host == "db":
+        try:
+            socket.gethostbyname("db")
+            return "db"
+        except (socket.gaierror, Exception):
+            return "127.0.0.1"
+    return raw_host
 
-        'ENGINE':
-            'django.db.backends.postgresql',
+USE_SQLITE = os.getenv("USE_SQLITE", "False") == "True" or (os.getenv("DB_HOST", "db") == "db" and not os.path.exists("/.dockerenv") and False)
 
-        'NAME':
-            os.getenv(
-                'DB_NAME',
-                'blood_db'
-            ),
-
-        'USER':
-            os.getenv(
-                'DB_USER',
-                'postgres'
-            ),
-
-        'PASSWORD':
-            os.getenv(
-                'DB_PASSWORD',
-                'postgres'
-            ),
-
-        'HOST':
-            os.getenv(
-                'DB_HOST',
-                'db'
-            ),
-
-        'PORT':
-            os.getenv(
-                'DB_PORT',
-                '5432'
-            ),
+if USE_SQLITE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        },
+        'ambulance_db': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'ambulance_db.sqlite3',
+        }
     }
-}
+else:
+    db_host = resolve_db_host('DB_HOST', 'db')
+    ambulance_db_host = resolve_db_host('AMBULANCE_DB_HOST', db_host)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'blood_db'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
+            'HOST': db_host,
+            'PORT': os.getenv('DB_PORT', '5432'),
+        },
+        'ambulance_db': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('AMBULANCE_DB_NAME', 'ambulance_db'),
+            'USER': os.getenv('AMBULANCE_DB_USER', os.getenv('DB_USER', 'postgres')),
+            'PASSWORD': os.getenv('AMBULANCE_DB_PASSWORD', os.getenv('DB_PASSWORD', 'postgres')),
+            'HOST': ambulance_db_host,
+            'PORT': os.getenv('AMBULANCE_DB_PORT', os.getenv('DB_PORT', '5432')),
+        }
+    }
+
+DATABASE_ROUTERS = ['core.db_routers.DatabaseRouter']
+
 
 
 # =====================================================
 # REDIS CACHE
 # =====================================================
-CACHES = {
+import sys
+IS_TESTING = 'test' in sys.argv
 
-    "default": {
-
-        "BACKEND":
-            "django_redis.cache.RedisCache",
-
-        "LOCATION":
-            "redis://redis:6379/1",
-
-        "OPTIONS": {
-
-            "CLIENT_CLASS":
-                "django_redis.client.DefaultClient",
-
+if IS_TESTING:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND":
+                "django_redis.cache.RedisCache",
+            "LOCATION":
+                "redis://redis:6379/1",
+            "OPTIONS": {
+                "CLIENT_CLASS":
+                    "django_redis.client.DefaultClient",
+            }
+        }
+    }
 
 
 # =====================================================
 # CHANNELS (WEBSOCKET)
 # =====================================================
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("redis", 6379)],
-            "capacity": 1500,
-            "expiry": 60,
+if IS_TESTING:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
         },
-    },
-}
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [("redis", 6379)],
+                "capacity": 1500,
+                "expiry": 60,
+            },
+        },
+    }
 
 
 # =====================================================
@@ -314,6 +359,25 @@ REST_FRAMEWORK = {
     }
 }
 
+try:
+    import drf_spectacular
+    REST_FRAMEWORK['DEFAULT_SCHEMA_CLASS'] = 'drf_spectacular.openapi.AutoSchema'
+except ImportError:
+    pass
+
+
+# =====================================================
+# SWAGGER / SPECTACULAR SETTINGS
+# =====================================================
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Apex Life Saver API',
+    'DESCRIPTION': 'API documentation for Apex Life Saver backend system.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_PATCH': True,
+    'COMPONENT_SPLIT_REQUEST': True,
+}
+
 
 # =====================================================
 # JWT SETTINGS
@@ -388,10 +452,14 @@ else:
 # CSRF TRUSTED ORIGINS
 # =====================================================
 CSRF_TRUSTED_ORIGINS = [
-
     "https://yourdomain.com",
-
     "https://api.yourdomain.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 
 
@@ -453,3 +521,18 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+
+# =====================================================
+# EMAIL CONFIGURATION
+# =====================================================
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False') == 'True'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'info@apexlifesaver.com')

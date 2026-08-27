@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import firebase_admin
 from firebase_admin import credentials
 from django.conf import settings
@@ -6,16 +7,17 @@ from django.conf import settings
 if not firebase_admin._apps:
     # Try environment variable first, then settings/django paths
     env_path = os.getenv("FIREBASE_CREDENTIALS")
-    
+    base_dir = Path(getattr(settings, "BASE_DIR", Path(__file__).resolve().parents[2]))
+
     possible_paths = []
     if env_path:
         possible_paths.append(env_path)
         # Also try relative to base dir if env path is relative
-        possible_paths.append(os.path.join(settings.BASE_DIR, env_path.lstrip('/')))
-        
+        possible_paths.append(os.path.join(base_dir, env_path.lstrip('/')))
+
     possible_paths.extend([
-        os.path.join(settings.BASE_DIR, "firebase", "firebase-service-account.json"),
-        os.path.join(settings.BASE_DIR, "firebase", "serviceAccountKey.json"),
+        os.path.join(base_dir, "firebase", "firebase-service-account.json"),
+        os.path.join(base_dir, "firebase", "serviceAccountKey.json"),
         "/app/firebase/firebase-service-account.json",
         "/app/firebase-service-account.json",
         "firebase/firebase-service-account.json",

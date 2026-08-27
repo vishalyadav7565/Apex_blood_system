@@ -73,6 +73,12 @@ class Hospital(models.Model):
         null=True
     )
 
+    aadhaar_card = models.ImageField(
+        upload_to='hospitals/aadhaar/',
+        blank=True,
+        null=True
+    )
+
     pincode = models.CharField(
         max_length=10,
         blank=True,

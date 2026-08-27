@@ -10,8 +10,10 @@ services:
       POSTGRES_DB: blood_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: Apex@2026
+      AMBULANCE_DB_NAME: ambulance_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
     ports:
       - "5432:5432"
 
@@ -25,7 +27,7 @@ services:
   web:
     build: .
     container_name: django_app
-    command: daphne -b 0.0.0.0 -p 8000 core.asgi:application
+    command: sh -c "python manage.py migrate && daphne -b 0.0.0.0 -p 8000 core.asgi:application"
     volumes:
       - .:/app
     ports:

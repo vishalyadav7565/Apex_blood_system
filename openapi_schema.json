@@ -1,0 +1,205 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Apex Life Saver API",
+    "version": "1.0.0",
+    "description": "Interactive OpenAPI 3.0 Swagger specification for Apex Life Saver Backend API (Users, OTP, Hospitals, Blood Requests, Ambulance, Owners, Drivers, and Authentication)."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000",
+      "description": "Local Development Server"
+    }
+  ],
+  "paths": {
+    "/api/owners/send-email-otp/": {
+      "post": {
+        "summary": "Send Ambulance Owner Email OTP",
+        "description": "Generates a 6-digit OTP code, stores it in DB with 5-minute expiry, and emails it to the ambulance owner.",
+        "tags": ["Owner Services"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "owner@apexlifesaver.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Owner Email OTP sent successfully",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Ambulance Owner Email OTP sent successfully",
+                  "otp": "482915"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request (e.g. Email missing)"
+          }
+        }
+      }
+    },
+    "/api/owners/verify-email-otp/": {
+      "post": {
+        "summary": "Verify Ambulance Owner Email OTP",
+        "description": "Verifies the 6-digit OTP code sent to ambulance owner's email.",
+        "tags": ["Owner Services"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "otp"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "owner@apexlifesaver.com"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "example": "482915"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Owner Email OTP verified successfully",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Ambulance Owner Email OTP verified successfully"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or Expired OTP"
+          }
+        }
+      }
+    },
+    "/api/users/send-otp/": {
+      "post": {
+        "summary": "Send Phone OTP",
+        "description": "Generates and sends SMS OTP code to mobile phone number.",
+        "tags": ["Authentication & OTP"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phone"],
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "example": "+919876543210"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Phone OTP sent"
+          }
+        }
+      }
+    },
+    "/api/users/verify-otp/": {
+      "post": {
+        "summary": "Verify Phone OTP & Login",
+        "description": "Verifies phone OTP code and returns JWT Access & Refresh tokens.",
+        "tags": ["Authentication & OTP"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phone", "otp"],
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "example": "+919876543210"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "example": "123456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verified & Logged in successfully",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "OTP verified",
+                  "is_new_user": false,
+                  "token": "eyJhbGciOiJIUzI1NiIsIn...",
+                  "refresh": "eyJhbGciOiJIUzI1NiIsIn..."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/owners/register/": {
+      "post": {
+        "summary": "Register Ambulance Owner",
+        "description": "Registers a new ambulance owner and dispatches verification OTP to email.",
+        "tags": ["Owner Services"],
+        "responses": {
+          "201": { "description": "Registration initiated" }
+        }
+      }
+    },
+    "/api/owners/register/verify-otps/": {
+      "post": {
+        "summary": "Verify Owner Registration OTPs",
+        "description": "Verifies owner registration OTPs.",
+        "tags": ["Owner Services"],
+        "responses": {
+          "200": { "description": "Owner email OTP verified successfully" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

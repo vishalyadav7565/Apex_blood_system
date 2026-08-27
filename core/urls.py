@@ -19,22 +19,6 @@ urlpatterns = [
         admin.site.urls
     ),
 
-    # AUTH & FIREBASE LOGIN ALIASES
-    path('api/auth/firebase-login/', firebase_login),
-    path('api/auth/firebase-login', firebase_login),
-    path('api/users/firebase-login/', firebase_login),
-    path('api/users/firebase-login', firebase_login),
-
-    # HELP & SUPPORT ALIASES
-    path('api/users/support/create/', create_support_ticket),
-    path('api/users/support/create', create_support_ticket),
-    path('api/users/support/', create_support_ticket),
-    path('api/users/support', create_support_ticket),
-    path('api/support/create/', create_support_ticket),
-    path('api/support/create', create_support_ticket),
-    path('api/support/', create_support_ticket),
-    path('api/support', create_support_ticket),
-
     # USERS
     path(
         'api/users/',
@@ -52,6 +36,25 @@ urlpatterns = [
         'api/requests/',
         include('apps.blood_requests.urls')
     ),
+
+    # AMBULANCE
+    path(
+        'api/ambulance/',
+        include('ambulance_apps.ambulance.urls')
+    ),
+
+    # DRIVERS
+    path(
+        'api/drivers/',
+        include('ambulance_apps.drivers.urls')
+    ),
+
+    # OWNERS
+    path(
+        'api/owners/',
+        include('ambulance_apps.owners.urls')
+    ),
+
 
     # ADMIN PANEL
     path(
@@ -73,11 +76,29 @@ urlpatterns = [
     ),
 ]
 
-# MEDIA FILES
+# SWAGGER & API DOCUMENTATION (SAFE CONDITIONAL IMPORT)
+try:
+    from drf_spectacular.views import (
+        SpectacularAPIView,
+        SpectacularRedocView,
+        SpectacularSwaggerView,
+    )
+    urlpatterns += [
+        path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+        path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+        path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui-root'),
+        path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    ]
+except ImportError:
+    pass
+
+# MEDIA & STATIC FILES
 if settings.DEBUG:
+    from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 
     urlpatterns += static(
         settings.MEDIA_URL,
         document_root=settings.MEDIA_ROOT
     )
+    urlpatterns += staticfiles_urlpatterns()
 

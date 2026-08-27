@@ -125,6 +125,8 @@ class HospitalProfileSerializer(
 
             'longitude',
 
+            'aadhaar_card',
+
             'is_verified',
 
             'created_at',

@@ -15,12 +15,11 @@ from .serializers import (
     HospitalSerializer,
     HospitalRegisterSerializer,
     HospitalLoginSerializer,
-   
 
 )
+from .utils import process_aadhaar_upload
 
 
-# 📏 Distance function (optimized + safe)
 def distance_km(lat1, lon1, lat2, lon2):
     try:
         dlon = radians(lon2 - lon1)
@@ -28,7 +27,7 @@ def distance_km(lat1, lon1, lat2, lon2):
         a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
         c = 2 * asin(sqrt(a))
         return 6371 * c
-    except:
+    except Exception:
         return None
 
 
@@ -456,9 +455,22 @@ def update_hospital_profile(
         id=id
     )
 
+    request_data = request.data
+    uploaded_aadhaar = request.FILES.get('aadhaar_card')
+    ocr_text = None
+
+    if uploaded_aadhaar:
+        processed = process_aadhaar_upload(uploaded_aadhaar)
+        ocr_text = processed.get('ocr_text')
+        if hasattr(request_data, 'copy'):
+            request_data = request_data.copy()
+            request_data['aadhaar_card'] = processed['processed_file']
+        else:
+            request_data = {'aadhaar_card': processed['processed_file']}
+
     serializer = HospitalProfileSerializer(
         hospital,
-        data=request.data,
+        data=request_data,
         partial=True
     )
 
@@ -466,21 +478,23 @@ def update_hospital_profile(
 
         serializer.save()
 
-        return Response({
-
+        response_data = {
             "success": True,
+            "message": "Profile updated successfully",
+            "hospital": serializer.data,
+        }
 
-            "message":
-                "Profile updated successfully",
+        if ocr_text is not None:
+            response_data["aadhaar_ocr_text"] = ocr_text
 
-            "hospital":
-                serializer.data
-        })
+        return Response(response_data)
 
     return Response(
         serializer.errors,
         status=400
     )
+
+
 @api_view(['GET'])
 def all_hospitals(request):
 

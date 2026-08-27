@@ -23,9 +23,20 @@ from django_ratelimit.decorators import ratelimit
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
+from django.core.mail import send_mail
+from django.conf import settings
+
 from firebase_admin import auth as firebase_auth
 from . import firebase_utils
 from .models import OTP, HelpSupport
+
+try:
+    from drf_spectacular.utils import extend_schema
+except ImportError:
+    def extend_schema(*args, **kwargs):
+        def decorator(f):
+            return f
+        return decorator
 
 User = get_user_model()
 
@@ -48,6 +59,7 @@ def normalize_phone(phone):
 # =========================================
 # SEND OTP
 # =========================================
+@extend_schema(tags=['Authentication & OTP'], summary="Send Phone or Email OTP")
 @ratelimit(
     key='ip',
     rate='5/m',
@@ -56,18 +68,22 @@ def normalize_phone(phone):
 @api_view(['POST'])
 def send_otp(request):
 
-    phone = normalize_phone(request.data.get('phone'))
+    raw_phone = request.data.get('phone')
+    phone = normalize_phone(raw_phone)
+    raw_email = request.data.get('email')
+    email = raw_email.strip().lower() if raw_email else ""
 
-    if not phone:
+    target_identifier = phone or email
 
+    if not target_identifier:
         return Response(
-            {"error": "Phone required"},
+            {"error": "Phone or email required"},
             status=status.HTTP_400_BAD_REQUEST
         )
 
     # remove old otp
     OTP.objects.filter(
-        phone=phone
+        phone=target_identifier
     ).delete()
 
     # generate new otp
@@ -76,26 +92,62 @@ def send_otp(request):
     )
 
     OTP.objects.create(
-        phone=phone,
+        phone=target_identifier,
         otp=otp
     )
 
-    print(f"📲 OTP for {phone} → {otp}")
+    print(f"[INFO] OTP for {target_identifier} -> {otp}")
 
-    return Response({
+    email_sent = False
+    if email:
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;">
+            <h2 style="color: #d9534f; text-align: center; margin-bottom: 5px;">Apex Life Saver</h2>
+            <p style="text-align: center; color: #666; font-size: 14px; margin-top: 0;">Emergency Medical Response Network</p>
+            <hr style="border: 0; border-top: 1px solid #eee;" />
+            <h3 style="color: #333; margin-top: 20px;">User Verification Code</h3>
+            <p style="font-size: 15px; color: #555;">Use the following One-Time Password (OTP) to complete your login or registration:</p>
+            <div style="text-align: center; margin: 25px 0;">
+                <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #d9534f; background: #f8d7da; padding: 12px 28px; border-radius: 6px; display: inline-block;">
+                    {otp}
+                </span>
+            </div>
+            <p style="font-size: 14px; color: #777;">This OTP is valid for <strong>5 minutes</strong>. Do not share this code with anyone.</p>
+            <hr style="border: 0; border-top: 1px solid #eee; margin-top: 30px;" />
+            <p style="font-size: 12px; color: #999; text-align: center;">&copy; Apex Life Saver. All rights reserved.</p>
+        </div>
+        """
+        text_content = f"Your Apex Life Saver OTP is: {otp}\n\nThis OTP will expire in 5 minutes."
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', 'info@apexlifesaver.com')
+        try:
+            sent_count = send_mail(
+                subject="Your Verification Code - Apex Life Saver",
+                message=text_content,
+                html_message=html_content,
+                from_email=from_email,
+                recipient_list=[email],
+                fail_silently=False
+            )
+            email_sent = sent_count > 0
+            print(f"[SUCCESS] User OTP email sent to {email} (Sent count: {sent_count})")
+        except Exception as e:
+            print(f"[ERROR] Failed to send user OTP email to {email}: {e}")
 
+    resp = {
         "success": True,
-
         "message": "OTP sent",
-
-        # DEV ONLY
         "otp": otp
-    })
+    }
+    if email:
+        resp["email_sent"] = email_sent
+
+    return Response(resp)
 
 
 # =========================================
 # VERIFY OTP + LOGIN/REGISTER
 # =========================================
+@extend_schema(tags=['Authentication & OTP'], summary="Verify Phone or Email OTP & Login")
 @ratelimit(
     key='ip',
     rate='10/m',
@@ -104,16 +156,21 @@ def send_otp(request):
 @api_view(['POST'])
 def verify_otp(request):
 
-    phone = normalize_phone(request.data.get('phone'))
+    raw_phone = request.data.get('phone')
+    phone = normalize_phone(raw_phone)
+    raw_email = request.data.get('email')
+    email = raw_email.strip().lower() if raw_email else ""
+    target_identifier = phone or email
+
     otp = request.data.get('otp')
 
     # =================================
     # VALIDATION
     # =================================
-    if not phone or not otp:
+    if not target_identifier or not otp:
 
         return Response({
-            "error": "Phone and OTP required"
+            "error": "Phone/email and OTP required"
         }, status=400)
 
     try:
@@ -122,7 +179,7 @@ def verify_otp(request):
         # GET LATEST OTP
         # =================================
         record = OTP.objects.filter(
-            phone=phone
+            phone=target_identifier
         ).latest('created_at')
 
         print("DB OTP:", record.otp)
