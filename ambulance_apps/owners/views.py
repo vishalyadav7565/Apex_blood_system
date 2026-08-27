@@ -45,10 +45,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _send_otp_email(email, otp_code, subject='Verify Your Email - Kanha Foundation', title='Email Verification'):
+def _send_otp_email(email, otp_code, subject='Verify Your Email - Apex Life Saver', title='Email Verification'):
     html_content = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #ffffff;">
-        <h2 style="color: #d9534f; text-align: center; margin-bottom: 5px;">Kanha Foundation</h2>
+        <h2 style="color: #d9534f; text-align: center; margin-bottom: 5px;">Apex Life Saver</h2>
         <p style="text-align: center; color: #666; font-size: 14px; margin-top: 0;">Emergency Medical & Ambulance Response Network</p>
         <hr style="border: 0; border-top: 1px solid #eee;" />
         <h3 style="color: #333; margin-top: 20px;">{title}</h3>
@@ -60,7 +60,7 @@ def _send_otp_email(email, otp_code, subject='Verify Your Email - Kanha Foundati
         </div>
         <p style="font-size: 14px; color: #777;">This OTP is valid for <strong>5 minutes</strong>. Do not share this code with anyone.</p>
         <hr style="border: 0; border-top: 1px solid #eee; margin-top: 30px;" />
-        <p style="font-size: 12px; color: #999; text-align: center;">&copy; Kanha Foundation - Apex Life Saver. All rights reserved.</p>
+        <p style="font-size: 12px; color: #999; text-align: center;">&copy; Apex Life Saver. All rights reserved.</p>
     </div>
     """
     text_content = f"Your {title} OTP is: {otp_code}\n\nThis OTP will expire in 5 minutes."
