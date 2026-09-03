@@ -449,7 +449,28 @@ else:
             "https://www.apexlifesaver.com",
             "https://admin.apexlifesaver.com",
             "https://ambulance.apexlifesaver.com",
+            "https://api.apexlifesaver.com",
         ]
+
+# Allow Netlify previews & subdomains
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.netlify\.app$",
+    r"^https://.*\.apexlifesaver\.com$",
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
 
 
 # =====================================================
