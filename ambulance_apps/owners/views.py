@@ -64,7 +64,7 @@ def _send_otp_email(email, otp_code, subject='Verify Your Email - Apex Life Save
     </div>
     """
     text_content = f"Your {title} OTP is: {otp_code}\n\nThis OTP will expire in 5 minutes."
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', 'info@apexlifesaver.com')
+    from_email = getattr(settings, 'EMAIL_HOST_USER', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'info@apexlifesaver.com'
     try:
         sent_count = send_mail(
             subject=subject,

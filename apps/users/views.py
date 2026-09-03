@@ -118,7 +118,7 @@ def send_otp(request):
         </div>
         """
         text_content = f"Your Apex Life Saver OTP is: {otp}\n\nThis OTP will expire in 5 minutes."
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or getattr(settings, 'EMAIL_HOST_USER', 'info@apexlifesaver.com')
+        from_email = getattr(settings, 'EMAIL_HOST_USER', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'info@apexlifesaver.com'
         try:
             sent_count = send_mail(
                 subject="Your Verification Code - Apex Life Saver",
