@@ -55,6 +55,12 @@ urlpatterns = [
         include('ambulance_apps.owners.urls')
     ),
 
+    # DOCUMENTS (OpenCV & OCR)
+    path(
+        'api/documents/',
+        include('ambulance_apps.documents.urls')
+    ),
+
 
     # ADMIN PANEL
     path(
