@@ -440,27 +440,38 @@ if DEBUG:
 else:
 
     # PRODUCTION
-    CORS_ALLOWED_ORIGINS = [
-
-        "https://yourdomain.com",
-
-        "https://api.yourdomain.com",
-    ]
+    cors_env = os.getenv("CORS_ALLOWED_ORIGINS")
+    if cors_env:
+        CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_env.split(",") if origin.strip()]
+    else:
+        CORS_ALLOWED_ORIGINS = [
+            "https://apexlifesaver.com",
+            "https://www.apexlifesaver.com",
+            "https://admin.apexlifesaver.com",
+            "https://ambulance.apexlifesaver.com",
+        ]
 
 
 # =====================================================
 # CSRF TRUSTED ORIGINS
 # =====================================================
-CSRF_TRUSTED_ORIGINS = [
-    "https://yourdomain.com",
-    "https://api.yourdomain.com",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-]
+csrf_env = os.getenv("CSRF_TRUSTED_ORIGINS")
+if csrf_env:
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_env.split(",") if origin.strip()]
+else:
+    CSRF_TRUSTED_ORIGINS = [
+        "https://apexlifesaver.com",
+        "https://www.apexlifesaver.com",
+        "https://admin.apexlifesaver.com",
+        "https://ambulance.apexlifesaver.com",
+        "https://api.apexlifesaver.com",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
 
 
 # =====================================================

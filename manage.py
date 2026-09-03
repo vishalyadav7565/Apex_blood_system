@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Auto-reload triggered for views.py update
 """Django's command-line utility for administrative tasks."""
 import os
 import sys

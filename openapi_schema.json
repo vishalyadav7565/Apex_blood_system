@@ -1,205 +1,1804 @@
-{
-  "openapi": "3.0.3",
-  "info": {
-    "title": "Apex Life Saver API",
-    "version": "1.0.0",
-    "description": "Interactive OpenAPI 3.0 Swagger specification for Apex Life Saver Backend API (Users, OTP, Hospitals, Blood Requests, Ambulance, Owners, Drivers, and Authentication)."
-  },
-  "servers": [
-    {
-      "url": "http://127.0.0.1:8000",
-      "description": "Local Development Server"
-    }
-  ],
-  "paths": {
-    "/api/owners/send-email-otp/": {
-      "post": {
-        "summary": "Send Ambulance Owner Email OTP",
-        "description": "Generates a 6-digit OTP code, stores it in DB with 5-minute expiry, and emails it to the ambulance owner.",
-        "tags": ["Owner Services"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["email"],
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email",
-                    "example": "owner@apexlifesaver.com"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Owner Email OTP sent successfully",
-            "content": {
-              "application/json": {
-                "example": {
-                  "success": true,
-                  "message": "Ambulance Owner Email OTP sent successfully",
-                  "otp": "482915"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request (e.g. Email missing)"
-          }
-        }
-      }
-    },
-    "/api/owners/verify-email-otp/": {
-      "post": {
-        "summary": "Verify Ambulance Owner Email OTP",
-        "description": "Verifies the 6-digit OTP code sent to ambulance owner's email.",
-        "tags": ["Owner Services"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["email", "otp"],
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email",
-                    "example": "owner@apexlifesaver.com"
-                  },
-                  "otp": {
-                    "type": "string",
-                    "example": "482915"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Owner Email OTP verified successfully",
-            "content": {
-              "application/json": {
-                "example": {
-                  "success": true,
-                  "message": "Ambulance Owner Email OTP verified successfully"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid or Expired OTP"
-          }
-        }
-      }
-    },
-    "/api/users/send-otp/": {
-      "post": {
-        "summary": "Send Phone OTP",
-        "description": "Generates and sends SMS OTP code to mobile phone number.",
-        "tags": ["Authentication & OTP"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["phone"],
-                "properties": {
-                  "phone": {
-                    "type": "string",
-                    "example": "+919876543210"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Phone OTP sent"
-          }
-        }
-      }
-    },
-    "/api/users/verify-otp/": {
-      "post": {
-        "summary": "Verify Phone OTP & Login",
-        "description": "Verifies phone OTP code and returns JWT Access & Refresh tokens.",
-        "tags": ["Authentication & OTP"],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["phone", "otp"],
-                "properties": {
-                  "phone": {
-                    "type": "string",
-                    "example": "+919876543210"
-                  },
-                  "otp": {
-                    "type": "string",
-                    "example": "123456"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Verified & Logged in successfully",
-            "content": {
-              "application/json": {
-                "example": {
-                  "success": true,
-                  "message": "OTP verified",
-                  "is_new_user": false,
-                  "token": "eyJhbGciOiJIUzI1NiIsIn...",
-                  "refresh": "eyJhbGciOiJIUzI1NiIsIn..."
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/owners/register/": {
-      "post": {
-        "summary": "Register Ambulance Owner",
-        "description": "Registers a new ambulance owner and dispatches verification OTP to email.",
-        "tags": ["Owner Services"],
-        "responses": {
-          "201": { "description": "Registration initiated" }
-        }
-      }
-    },
-    "/api/owners/register/verify-otps/": {
-      "post": {
-        "summary": "Verify Owner Registration OTPs",
-        "description": "Verifies owner registration OTPs.",
-        "tags": ["Owner Services"],
-        "responses": {
-          "200": { "description": "Owner email OTP verified successfully" }
-        }
-      }
-    }
-  },
-  "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
-      }
-    }
-  }
-}
+openapi: 3.0.3
+info:
+  title: Apex Life Saver API
+  version: 1.0.0
+  description: API documentation for Apex Life Saver backend system.
+paths:
+  /api/admin/ambulance-drivers/:
+    get:
+      operationId: api_admin_ambulance_drivers_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/ambulance-drivers/{id}/verify/:
+    post:
+      operationId: api_admin_ambulance_drivers_verify_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/ambulance-owners/:
+    get:
+      operationId: api_admin_ambulance_owners_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/ambulance-owners/{id}/verify/:
+    post:
+      operationId: api_admin_ambulance_owners_verify_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/ambulances/:
+    get:
+      operationId: api_admin_ambulances_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/analytics/:
+    get:
+      operationId: api_admin_analytics_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/admin/blood-group-trends/:
+    get:
+      operationId: api_admin_blood_group_trends_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/admin/dashboard/:
+    get:
+      operationId: api_admin_dashboard_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/export-requests/:
+    get:
+      operationId: api_admin_export_requests_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/admin/hospital-performance/:
+    get:
+      operationId: api_admin_hospital_performance_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/admin/hospitals/:
+    get:
+      operationId: api_admin_hospitals_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/hospitals/{id}/status/:
+    post:
+      operationId: api_admin_hospitals_status_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/login/:
+    post:
+      operationId: api_admin_login_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/admin/map/:
+    get:
+      operationId: api_admin_map_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/profile/:
+    get:
+      operationId: api_admin_profile_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/send-notification/:
+    post:
+      operationId: api_admin_send_notification_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/support/:
+    get:
+      operationId: api_admin_support_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/admin/support/{id}/status/:
+    post:
+      operationId: api_admin_support_status_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: api_admin_support_status_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: api_admin_support_status_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/admin/users/:
+    get:
+      operationId: api_admin_users_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/ambulance/{id}/:
+    get:
+      operationId: api_ambulance_retrieve
+      description: Manage an individual ambulance record by ID.
+      summary: Retrieve, Update or Delete an Ambulance
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Ambulance Management
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ambulance'
+          description: ''
+        '204':
+          description: Deleted successfully
+        '404':
+          description: Ambulance record not found
+    put:
+      operationId: api_ambulance_update
+      description: Manage an individual ambulance record by ID.
+      summary: Retrieve, Update or Delete an Ambulance
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Ambulance Management
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmbulanceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AmbulanceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AmbulanceRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ambulance'
+          description: ''
+        '204':
+          description: Deleted successfully
+        '404':
+          description: Ambulance record not found
+    patch:
+      operationId: api_ambulance_partial_update
+      description: Manage an individual ambulance record by ID.
+      summary: Retrieve, Update or Delete an Ambulance
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Ambulance Management
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAmbulanceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAmbulanceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAmbulanceRequest'
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ambulance'
+          description: ''
+        '204':
+          description: Deleted successfully
+        '404':
+          description: Ambulance record not found
+    delete:
+      operationId: api_ambulance_destroy
+      description: Manage an individual ambulance record by ID.
+      summary: Retrieve, Update or Delete an Ambulance
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Ambulance Management
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ambulance'
+          description: ''
+        '204':
+          description: Deleted successfully
+        '404':
+          description: Ambulance record not found
+  /api/ambulance/register/:
+    post:
+      operationId: api_ambulance_register_create
+      description: Registers a new ambulance unit into the system. Validates vehicle_number,
+        registration_number, ambulance_type, optional owner_id, and optional hospital_id.
+      summary: Register a new Ambulance
+      tags:
+      - Ambulance Management
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmbulanceRegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AmbulanceRegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AmbulanceRegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ambulance'
+          description: ''
+        '400':
+          description: Bad Request - Validation Errors
+  /api/drivers/active-trip/{driver_id}/:
+    get:
+      operationId: api_drivers_active_trip_retrieve
+      parameters:
+      - in: path
+        name: driver_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/link-ambulance/:
+    post:
+      operationId: api_drivers_link_ambulance_create
+      description: |-
+        Links a driver to an ambulance by number or scanned QR code.
+        Generates and sends verification email request to the hospital owner.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/login/:
+    post:
+      operationId: api_drivers_login_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/owner-review/:
+    post:
+      operationId: api_drivers_owner_review_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/pincode-lookup/:
+    get:
+      operationId: api_drivers_pincode_lookup_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/profile/{driver_id}/:
+    get:
+      operationId: api_drivers_profile_retrieve
+      parameters:
+      - in: path
+        name: driver_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/register/:
+    post:
+      operationId: api_drivers_register_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/send-otp/:
+    post:
+      operationId: api_drivers_send_otp_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/trip/{trip_id}/update-status/:
+    post:
+      operationId: api_drivers_trip_update_status_create
+      parameters:
+      - in: path
+        name: trip_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/update-location/:
+    post:
+      operationId: api_drivers_update_location_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/update-status/:
+    post:
+      operationId: api_drivers_update_status_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/upload-doc/:
+    post:
+      operationId: api_drivers_upload_doc_create
+      description: |-
+        POST files to upload: photo, aadhaar_card, driving_licence
+        Triggers OCR and Face matching analysis automatically upon receipt of documents.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/verify-driver-by-owner/:
+    get:
+      operationId: api_drivers_verify_driver_by_owner_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/drivers/verify-otp/:
+    post:
+      operationId: api_drivers_verify_otp_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/all/:
+    get:
+      operationId: api_hospitals_all_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/hospitals/{id}/verify/:
+    post:
+      operationId: api_hospitals_hospitals_verify_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/inventory/:
+    get:
+      operationId: api_hospitals_inventory_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/inventory/add/:
+    post:
+      operationId: api_hospitals_inventory_add_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/inventory/remove/:
+    post:
+      operationId: api_hospitals_inventory_remove_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/login/:
+    get:
+      operationId: api_hospitals_login_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: api_hospitals_login_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/nearby/:
+    get:
+      operationId: api_hospitals_nearby_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/profile/{id}/:
+    get:
+      operationId: api_hospitals_profile_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/profile/{id}/update/:
+    put:
+      operationId: api_hospitals_profile_update_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/register/:
+    post:
+      operationId: api_hospitals_register_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/save_hospital_fcm_token/:
+    post:
+      operationId: api_hospitals_save_hospital_fcm_token_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/hospitals/stats/:
+    get:
+      operationId: api_hospitals_stats_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/admin-approve/{owner_id}/:
+    post:
+      operationId: api_owners_admin_approve_create
+      description: |-
+        Super Admin endpoint to approve or reject an owner registration itemized or full.
+        Accepts:
+        - doc_type: 'aadhaar' | 'business_doc' | 'selfie' | 'all'
+        - action: 'approve' | 'reject'
+        - reason: optional text string
+      parameters:
+      - in: path
+        name: owner_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/login/:
+    post:
+      operationId: api_owners_login_create
+      description: |-
+        Owner Login Step 1: Submit email & password.
+        Verifies credentials and status, then sends an email OTP.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/login/firebase/:
+    post:
+      operationId: api_owners_login_firebase_create
+      description: |-
+        Owner login using Firebase ID Token.
+        Verifies the token, extracts the email, and returns access token if the owner is approved.
+        If the owner doesn't exist but a User from the Flutter app exists with that email/phone,
+        automatically creates the Owner record.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/login/verify-otp/:
+    post:
+      operationId: api_owners_login_verify_otp_create
+      description: 'Owner Login Step 2: Validate Email OTP and retrieve auth details.'
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/profile/{owner_id}/:
+    get:
+      operationId: api_owners_profile_retrieve
+      parameters:
+      - in: path
+        name: owner_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: api_owners_profile_update
+      parameters:
+      - in: path
+        name: owner_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/register/:
+    post:
+      operationId: api_owners_register_create
+      description: |-
+        Step 1: Provide owner and company details.
+        Creates an unverified Owner record and generates + sends Mobile and Email OTPs.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/register/upload-documents/:
+    post:
+      operationId: api_owners_register_upload_documents_create
+      description: |-
+        Step 4: Upload selfie and business documents.
+        Triggers face match comparison scoring and sets status to 'pending_admin_review'.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/register/verify-digilocker/:
+    post:
+      operationId: api_owners_register_verify_digilocker_create
+      description: 'Step 3: Verify Aadhaar Identity and upload Aadhaar card Front
+        & Back photos.'
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/register/verify-firebase-email/:
+    post:
+      operationId: api_owners_register_verify_firebase_email_create
+      description: |-
+        Real email verification using Firebase ID Token.
+        Accepts idToken and email. Verifies the token and checks if the email is verified in Firebase.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/register/verify-otps/:
+    post:
+      operationId: api_owners_register_verify_otps_create
+      description: 'Step 2: Verify both mobile and email OTPs.'
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/send-email-otp/:
+    post:
+      operationId: api_owners_send_email_otp_create
+      description: Send Email OTP for Ambulance Owner registration/login.
+      summary: Send Owner Email OTP
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendEmailOTPRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SendEmailOTPRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SendEmailOTPRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/owners/verify-email-otp/:
+    post:
+      operationId: api_owners_verify_email_otp_create
+      description: Verify Email OTP for Ambulance Owner.
+      summary: Verify Owner Email OTP
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailOTPRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailOTPRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailOTPRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/requests/:
+    get:
+      operationId: api_requests_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/requests/{id}/accept/:
+    post:
+      operationId: api_requests_accept_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/requests/{id}/cancel/:
+    post:
+      operationId: api_requests_cancel_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/requests/{id}/complete/:
+    post:
+      operationId: api_requests_complete_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/requests/{id}/donors/:
+    get:
+      operationId: api_requests_donors_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/requests/{id}/reject/:
+    post:
+      operationId: api_requests_reject_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/requests/create/:
+    post:
+      operationId: api_requests_create_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/requests/current-request/:
+    get:
+      operationId: api_requests_current_request_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/requests/detail/{id}/:
+    get:
+      operationId: api_requests_detail_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/requests/fallback/:
+    get:
+      operationId: api_requests_fallback_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/requests/my-requests/:
+    get:
+      operationId: api_requests_my_requests_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/token/:
+    post:
+      operationId: api_token_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /api/token/refresh/:
+    post:
+      operationId: api_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/users/all-users/:
+    get:
+      operationId: api_users_all_users_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/users/complete-profile/:
+    post:
+      operationId: api_users_complete_profile_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/users/firebase-login/:
+    get:
+      operationId: api_users_firebase_login_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: api_users_firebase_login_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/users/live/:
+    get:
+      operationId: api_users_live_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/users/location/:
+    post:
+      operationId: api_users_location_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/users/profile/:
+    get:
+      operationId: api_users_profile_retrieve
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/users/save-fcm-token/:
+    post:
+      operationId: api_users_save_fcm_token_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/users/send-otp/:
+    post:
+      operationId: api_users_send_otp_create
+      summary: Send Phone or Email OTP
+      tags:
+      - Authentication & OTP
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/users/support/create/:
+    post:
+      operationId: api_users_support_create_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/users/toggle-donor/:
+    post:
+      operationId: api_users_toggle_donor_create
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/users/verify-otp/:
+    post:
+      operationId: api_users_verify_otp_create
+      summary: Verify Phone or Email OTP & Login
+      tags:
+      - Authentication & OTP
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+components:
+  schemas:
+    Ambulance:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        vehicle_number:
+          type: string
+          maxLength: 50
+        ambulance_type:
+          $ref: '#/components/schemas/AmbulanceTypeEnum'
+        registration_number:
+          type: string
+          maxLength: 50
+        owner:
+          allOf:
+          - $ref: '#/components/schemas/Owner'
+          readOnly: true
+        hospital:
+          allOf:
+          - $ref: '#/components/schemas/Hospital'
+          readOnly: true
+        is_active:
+          type: boolean
+        is_available:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ambulance_type
+      - created_at
+      - hospital
+      - id
+      - owner
+      - registration_number
+      - updated_at
+      - vehicle_number
+    AmbulanceRegisterRequest:
+      type: object
+      properties:
+        vehicle_number:
+          type: string
+          minLength: 1
+          maxLength: 50
+        ambulance_type:
+          $ref: '#/components/schemas/AmbulanceTypeEnum'
+        registration_number:
+          type: string
+          minLength: 1
+          maxLength: 50
+        owner_id:
+          type: integer
+          writeOnly: true
+          nullable: true
+        hospital_id:
+          type: integer
+          writeOnly: true
+          nullable: true
+        is_active:
+          type: boolean
+        is_available:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+      required:
+      - ambulance_type
+      - registration_number
+      - vehicle_number
+    AmbulanceRequest:
+      type: object
+      properties:
+        vehicle_number:
+          type: string
+          minLength: 1
+          maxLength: 50
+        ambulance_type:
+          $ref: '#/components/schemas/AmbulanceTypeEnum'
+        registration_number:
+          type: string
+          minLength: 1
+          maxLength: 50
+        owner_id:
+          type: integer
+          writeOnly: true
+          nullable: true
+        hospital_id:
+          type: integer
+          writeOnly: true
+          nullable: true
+        is_active:
+          type: boolean
+        is_available:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+      required:
+      - ambulance_type
+      - registration_number
+      - vehicle_number
+    AmbulanceTypeEnum:
+      enum:
+      - BLS
+      - ALS
+      - ICU
+      - Neonatal
+      - Patient Transport
+      type: string
+      description: |-
+        * `BLS` - BLS
+        * `ALS` - ALS
+        * `ICU` - ICU
+        * `Neonatal` - Neonatal
+        * `Patient Transport` - Patient Transport
+    Hospital:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        email:
+          nullable: true
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        phone:
+          type: string
+          nullable: true
+          maxLength: 15
+        address:
+          type: string
+          nullable: true
+        pincode:
+          type: string
+          nullable: true
+          maxLength: 10
+        latitude:
+          type: number
+          format: double
+          nullable: true
+        longitude:
+          type: number
+          format: double
+          nullable: true
+        is_verified:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        distance:
+          type: string
+          readOnly: true
+      required:
+      - created_at
+      - distance
+      - id
+      - name
+      - updated_at
+    HospitalRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          nullable: true
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        phone:
+          type: string
+          nullable: true
+          maxLength: 15
+        address:
+          type: string
+          nullable: true
+        pincode:
+          type: string
+          nullable: true
+          maxLength: 10
+        latitude:
+          type: number
+          format: double
+          nullable: true
+        longitude:
+          type: number
+          format: double
+          nullable: true
+        is_verified:
+          type: boolean
+      required:
+      - name
+    Owner:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          type: string
+          maxLength: 15
+        company_name:
+          type: string
+          nullable: true
+          maxLength: 150
+        address:
+          type: string
+          nullable: true
+        verification_status:
+          allOf:
+          - $ref: '#/components/schemas/VerificationStatusEnum'
+          readOnly: true
+        is_verified:
+          type: boolean
+          readOnly: true
+        is_approved:
+          type: string
+          readOnly: true
+        is_email_verified:
+          type: boolean
+          readOnly: true
+        is_phone_verified:
+          type: boolean
+          readOnly: true
+        is_aadhaar_verified:
+          type: boolean
+          readOnly: true
+        is_business_doc_verified:
+          type: boolean
+        is_selfie_verified:
+          type: boolean
+        rejection_reason:
+          type: string
+          nullable: true
+        digilocker_token:
+          type: string
+          nullable: true
+          maxLength: 255
+        aadhaar_number:
+          type: string
+          nullable: true
+          maxLength: 20
+        aadhaar_card:
+          type: string
+          format: uri
+          nullable: true
+        aadhaar_card_back:
+          type: string
+          format: uri
+          nullable: true
+        business_doc:
+          type: string
+          format: uri
+          nullable: true
+        selfie:
+          type: string
+          format: uri
+          nullable: true
+        face_match_score:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - face_match_score
+      - id
+      - is_aadhaar_verified
+      - is_approved
+      - is_email_verified
+      - is_phone_verified
+      - is_verified
+      - name
+      - phone
+      - updated_at
+      - verification_status
+    OwnerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 15
+        company_name:
+          type: string
+          nullable: true
+          maxLength: 150
+        address:
+          type: string
+          nullable: true
+        is_business_doc_verified:
+          type: boolean
+        is_selfie_verified:
+          type: boolean
+        rejection_reason:
+          type: string
+          nullable: true
+        digilocker_token:
+          type: string
+          nullable: true
+          maxLength: 255
+        aadhaar_number:
+          type: string
+          nullable: true
+          maxLength: 20
+        aadhaar_card:
+          type: string
+          format: binary
+          nullable: true
+        aadhaar_card_back:
+          type: string
+          format: binary
+          nullable: true
+        business_doc:
+          type: string
+          format: binary
+          nullable: true
+        selfie:
+          type: string
+          format: binary
+          nullable: true
+      required:
+      - email
+      - name
+      - phone
+    PatchedAmbulanceRequest:
+      type: object
+      properties:
+        vehicle_number:
+          type: string
+          minLength: 1
+          maxLength: 50
+        ambulance_type:
+          $ref: '#/components/schemas/AmbulanceTypeEnum'
+        registration_number:
+          type: string
+          minLength: 1
+          maxLength: 50
+        owner_id:
+          type: integer
+          writeOnly: true
+          nullable: true
+        hospital_id:
+          type: integer
+          writeOnly: true
+          nullable: true
+        is_active:
+          type: boolean
+        is_available:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+    SendEmailOTPRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+    StatusEnum:
+      enum:
+      - offline
+      - online
+      - busy
+      - maintenance
+      type: string
+      description: |-
+        * `offline` - Offline
+        * `online` - Online
+        * `busy` - Busy
+        * `maintenance` - Maintenance
+    TokenObtainPair:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - refresh
+    TokenObtainPairRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - password
+      - username
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    VerificationStatusEnum:
+      enum:
+      - pending_verification
+      - pending_admin_review
+      - approved
+      - rejected
+      type: string
+      description: |-
+        * `pending_verification` - Pending Verification
+        * `pending_admin_review` - Pending Admin Review
+        * `approved` - Approved
+        * `rejected` - Rejected
+    VerifyEmailOTPRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        otp:
+          type: string
+          minLength: 1
+          maxLength: 6
+      required:
+      - email
+      - otp
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

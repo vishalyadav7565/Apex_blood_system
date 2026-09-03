@@ -7,6 +7,7 @@ from apps.blood_requests.models import BloodRequest
 from django.http import HttpResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework import status
 from rest_framework.permissions import (
     IsAuthenticated,
     AllowAny
@@ -843,6 +844,32 @@ def update_support_status(request, id):
     })
 
 
+def serialize_owner_data(owner):
+    return {
+        "id": owner.id,
+        "name": owner.name,
+        "email": owner.email,
+        "phone": owner.phone,
+        "company_name": owner.company_name,
+        "address": owner.address,
+        "verification_status": owner.verification_status,
+        "is_verified": owner.is_verified,
+        "is_email_verified": owner.is_email_verified,
+        "is_phone_verified": owner.is_phone_verified,
+        "is_aadhaar_verified": owner.is_aadhaar_verified,
+        "is_business_doc_verified": getattr(owner, 'is_business_doc_verified', False),
+        "is_selfie_verified": getattr(owner, 'is_selfie_verified', False),
+        "rejection_reason": owner.rejection_reason,
+        "aadhaar_number": owner.aadhaar_number,
+        "aadhaar_card": owner.aadhaar_card.url if owner.aadhaar_card else None,
+        "aadhaar_card_back": owner.aadhaar_card_back.url if hasattr(owner, 'aadhaar_card_back') and owner.aadhaar_card_back else None,
+        "business_doc": owner.business_doc.url if owner.business_doc else None,
+        "selfie": owner.selfie.url if owner.selfie else None,
+        "face_match_score": owner.face_match_score,
+        "created_at": owner.created_at.isoformat() if owner.created_at else None,
+    }
+
+
 # ==========================================
 # AMBULANCE & DRIVERS MANAGEMENT
 # ==========================================
@@ -870,29 +897,7 @@ def get_ambulance_owners(request):
         elif verification_status == 'rejected':
             owners = owners.filter(verification_status='rejected')
 
-    data = []
-    for owner in owners:
-        data.append({
-            "id": owner.id,
-            "name": owner.name,
-            "email": owner.email,
-            "phone": owner.phone,
-            "company_name": owner.company_name,
-            "address": owner.address,
-            "verification_status": owner.verification_status,
-            "is_verified": owner.is_verified,
-            "is_email_verified": owner.is_email_verified,
-            "is_phone_verified": owner.is_phone_verified,
-            "is_aadhaar_verified": owner.is_aadhaar_verified,
-            "aadhaar_number": owner.aadhaar_number,
-            "aadhaar_card": owner.aadhaar_card.url if owner.aadhaar_card else None,
-            "aadhaar_card_back": owner.aadhaar_card_back.url if hasattr(owner, 'aadhaar_card_back') and owner.aadhaar_card_back else None,
-            "business_doc": owner.business_doc.url if owner.business_doc else None,
-            "selfie": owner.selfie.url if owner.selfie else None,
-            "face_match_score": owner.face_match_score,
-            "created_at": owner.created_at.isoformat() if owner.created_at else None,
-        })
-        
+    data = [serialize_owner_data(owner) for owner in owners]
     return Response(data)
 
 
@@ -903,24 +908,41 @@ def verify_ambulance_owner(request, id):
         return Response({"error": "Unauthorized"}, status=403)
         
     owner = get_object_or_404(Owner, id=id)
-    action = request.data.get('action')  # 'approve' or 'reject'
+    action = request.data.get('action', 'approve')
+    doc_type = request.data.get('doc_type', 'all')
+    reason = request.data.get('reason', '')
     
-    if action == 'approve':
+    if doc_type == 'aadhaar':
+        owner.is_aadhaar_verified = (action == 'approve')
+    elif doc_type == 'business_doc':
+        owner.is_business_doc_verified = (action == 'approve')
+    elif doc_type == 'selfie':
+        owner.is_selfie_verified = (action == 'approve')
+    elif doc_type == 'all':
+        if action == 'approve':
+            owner.is_aadhaar_verified = True
+            owner.is_business_doc_verified = True
+            owner.is_selfie_verified = True
+            owner.verification_status = 'approved'
+            owner.is_verified = True
+            owner.rejection_reason = None
+        else:
+            owner.verification_status = 'rejected'
+            owner.is_verified = False
+            owner.rejection_reason = reason or "Rejected by Super Admin"
+
+    # Auto-promote to approved if all 3 documents are approved
+    if owner.is_aadhaar_verified and owner.is_business_doc_verified and owner.is_selfie_verified and action == 'approve':
         owner.verification_status = 'approved'
         owner.is_verified = True
+        owner.rejection_reason = None
     elif action == 'reject':
         owner.verification_status = 'rejected'
         owner.is_verified = False
-    else:
-        return Response({"error": "Invalid action. Choose 'approve' or 'reject'"}, status=400)
-        
+        owner.rejection_reason = reason or f"{doc_type.replace('_', ' ').title()} rejected by Super Admin"
+
     owner.save()
-    return Response({
-        "id": owner.id,
-        "name": owner.name,
-        "verification_status": owner.verification_status,
-        "is_verified": owner.is_verified
-    })
+    return Response(serialize_owner_data(owner))
 
 
 @api_view(['GET'])
@@ -1024,11 +1046,37 @@ def get_ambulances(request):
     
     state = request.query_params.get('state')
     district = request.query_params.get('district')
+    verification_status = request.query_params.get('verification_status') or request.query_params.get('approval_status')
+    search = request.query_params.get('search')
     
     if state:
-        ambulances = ambulances.filter(Q(driver__state__iexact=state) | Q(hospital__address__icontains=state))
+        ambulances = ambulances.filter(
+            Q(driver__state__iexact=state) | 
+            Q(hospital__address__icontains=state) |
+            Q(owner__address__icontains=state)
+        )
     if district:
-        ambulances = ambulances.filter(Q(driver__district__iexact=district) | Q(hospital__address__icontains=district))
+        ambulances = ambulances.filter(
+            Q(driver__district__iexact=district) | 
+            Q(hospital__address__icontains=district) |
+            Q(owner__address__icontains=district)
+        )
+    if verification_status:
+        if verification_status in ['verified', 'approved']:
+            ambulances = ambulances.filter(Q(approval_status='approved') | Q(is_approved=True))
+        elif verification_status == 'pending':
+            ambulances = ambulances.filter(approval_status='pending_admin_review')
+        elif verification_status == 'rejected':
+            ambulances = ambulances.filter(approval_status='rejected')
+
+    if search:
+        ambulances = ambulances.filter(
+            Q(vehicle_number__icontains=search) |
+            Q(registration_number__icontains=search) |
+            Q(owner__name__icontains=search) |
+            Q(owner__company_name__icontains=search) |
+            Q(hospital__name__icontains=search)
+        )
 
     data = []
     for amb in ambulances:
@@ -1037,14 +1085,76 @@ def get_ambulances(request):
             "vehicle_number": amb.vehicle_number,
             "ambulance_type": amb.ambulance_type,
             "registration_number": amb.registration_number,
+            "owner": {
+                "id": amb.owner.id,
+                "name": amb.owner.name,
+                "company_name": amb.owner.company_name,
+                "phone": amb.owner.phone,
+                "email": amb.owner.email,
+            } if amb.owner else None,
             "hospital": {
                 "id": amb.hospital.id,
                 "name": amb.hospital.name,
             } if amb.hospital else None,
             "is_active": amb.is_active,
             "is_available": amb.is_available,
+            "is_approved": amb.is_approved,
+            "approval_status": amb.approval_status,
+            "rejection_reason": amb.rejection_reason,
             "status": amb.status,
             "created_at": amb.created_at.isoformat() if amb.created_at else None,
         })
         
     return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def approve_ambulance_admin(request, id):
+    if not request.user.is_staff:
+        return Response({"error": "Unauthorized"}, status=403)
+        
+    try:
+        ambulance = Ambulance.objects.get(id=id)
+    except Ambulance.DoesNotExist:
+        return Response({"error": f"Ambulance #{id} not found."}, status=404)
+
+    ambulance.is_approved = True
+    ambulance.approval_status = "approved"
+    ambulance.is_active = True
+    ambulance.rejection_reason = None
+    ambulance.save()
+    return Response({
+        "message": "Ambulance approved successfully.",
+        "id": ambulance.id,
+        "vehicle_number": ambulance.vehicle_number,
+        "approval_status": ambulance.approval_status,
+        "is_approved": ambulance.is_approved
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reject_ambulance_admin(request, id):
+    if not request.user.is_staff:
+        return Response({"error": "Unauthorized"}, status=403)
+        
+    try:
+        ambulance = Ambulance.objects.get(id=id)
+    except Ambulance.DoesNotExist:
+        return Response({"error": f"Ambulance #{id} not found."}, status=404)
+
+    reason = request.data.get('reason') or request.data.get('rejection_reason') or 'Registration rejected by admin.'
+    ambulance.is_approved = False
+    ambulance.approval_status = "rejected"
+    ambulance.is_active = False
+    ambulance.rejection_reason = reason
+    ambulance.save()
+    return Response({
+        "message": "Ambulance rejected.",
+        "id": ambulance.id,
+        "vehicle_number": ambulance.vehicle_number,
+        "approval_status": ambulance.approval_status,
+        "is_approved": ambulance.is_approved,
+        "rejection_reason": ambulance.rejection_reason
+    })

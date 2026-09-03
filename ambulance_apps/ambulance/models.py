@@ -1,5 +1,6 @@
 from django.db import models
 from apps.hospitals.models import Hospital
+from ambulance_apps.owners.models import Owner
 
 
 class Ambulance(models.Model):
@@ -30,14 +31,37 @@ class Ambulance(models.Model):
         max_length=50,
         unique=True
     )
+    owner = models.ForeignKey(
+        Owner,
+        on_delete=models.CASCADE,
+        related_name="ambulances",
+        db_constraint=False,
+        null=True,
+        blank=True
+    )
     hospital = models.ForeignKey(
         Hospital,
         on_delete=models.CASCADE,
         related_name="ambulances",
-        db_constraint=False
+        db_constraint=False,
+        null=True,
+        blank=True
     )
+    APPROVAL_STATUS_CHOICES = [
+        ("pending_admin_review", "Pending Admin Review"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    ]
+
     is_active = models.BooleanField(default=True)
     is_available = models.BooleanField(default=True)
+    is_approved = models.BooleanField(default=False)
+    approval_status = models.CharField(
+        max_length=30,
+        choices=APPROVAL_STATUS_CHOICES,
+        default="pending_admin_review"
+    )
+    rejection_reason = models.TextField(blank=True, null=True)
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,

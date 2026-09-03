@@ -20,6 +20,8 @@ from .views import (
     get_ambulance_drivers,
     verify_ambulance_driver,
     get_ambulances,
+    approve_ambulance_admin,
+    reject_ambulance_admin,
 )
 
 urlpatterns = [
@@ -107,5 +109,13 @@ urlpatterns = [
     path(
         "ambulances/",
         get_ambulances
+    ),
+    path(
+        "ambulances/<int:id>/approve/",
+        approve_ambulance_admin
+    ),
+    path(
+        "ambulances/<int:id>/reject/",
+        reject_ambulance_admin
     ),
 ]
