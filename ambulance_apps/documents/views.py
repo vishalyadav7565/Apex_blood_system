@@ -4,12 +4,16 @@ import random
 from PIL import Image
 import io
 import re
+import uuid
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import AllowAny
+
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 from .models import VerificationSession
 
@@ -24,28 +28,116 @@ except ImportError:
     pytesseract = None
 
 
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB limit
+
+
+def validate_and_decode_image(image_input):
+    """
+    Validates uploaded image file or base64 string:
+    - Checks max size (< 10MB)
+    - Validates file MIME type / PIL image format
+    - Ensures valid image decodability
+    Returns (image_bytes, format_name) or raises ValueError
+    """
+    image_bytes = None
+
+    if hasattr(image_input, 'read'):
+        # UploadedFile object from request.FILES
+        image_bytes = image_input.read()
+    elif isinstance(image_input, str):
+        # Base64 data URL or raw string
+        base64_str = image_input
+        if ',' in base64_str:
+            base64_str = base64_str.split(',')[1]
+        try:
+            image_bytes = base64.b64decode(base64_str)
+        except Exception:
+            raise ValueError("Invalid base64 image encoding.")
+    elif isinstance(image_input, bytes):
+        image_bytes = image_input
+    else:
+        raise ValueError("Unsupported image input format.")
+
+    if not image_bytes:
+        raise ValueError("Empty image data provided.")
+
+    if len(image_bytes) > MAX_FILE_SIZE:
+        raise ValueError(f"Image file size exceeds maximum limit of 10 MB ({len(image_bytes)} bytes provided).")
+
+    try:
+        pil_img = Image.open(io.BytesIO(image_bytes))
+        pil_img.verify()
+        # Re-open after verify() to inspect format
+        pil_img = Image.open(io.BytesIO(image_bytes))
+        img_format = pil_img.format.upper() if pil_img.format else "JPEG"
+        if img_format not in ['JPEG', 'JPG', 'PNG', 'WEBP', 'BMP']:
+            raise ValueError(f"Unsupported image format: {img_format}. Allowed formats: JPEG, PNG, WEBP, BMP.")
+    except Exception as err:
+        if isinstance(err, ValueError):
+            raise err
+        raise ValueError("Corrupted or unreadable image file.")
+
+    return image_bytes, img_format
+
+
+def broadcast_session_update(session):
+    """
+    Broadcasts session status update to Django Channels WebSocket group.
+    """
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                f"verif_{session.code}",
+                {
+                    "type": "verification_status",
+                    "status": session.status,
+                    "data": {
+                        "type": "verification_status",
+                        "status": session.status,
+                        "session_id": session.code,
+                        "code": session.code,
+                        "token": session.token,
+                        "front_image": session.front_image,
+                        "back_image": session.back_image,
+                        "selfie_image": session.selfie_image,
+                        "updated_at": session.updated_at.isoformat()
+                    }
+                }
+            )
+    except Exception as ws_err:
+        print("WS Broadcast info:", ws_err)
+
+
 class CreateVerificationSessionView(APIView):
     """
-    POST /api/documents/session/create/
-    Creates a new real-time verification session code (VERIF-XXXXXX)
+    POST /api/verification/session/create/
+    Creates a secure temporary verification session and returns session_id, token, and qr_url
     """
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        session_code = f"VERIF-{random.randint(100000, 999999)}"
-        while VerificationSession.objects.filter(code=session_code).exists():
-            session_code = f"VERIF-{random.randint(100000, 999999)}"
+        session_id = f"VERIF-{random.randint(100000, 999999)}"
+        token = uuid.uuid4().hex[:16]
+        while VerificationSession.objects.filter(code=session_id).exists():
+            session_id = f"VERIF-{random.randint(100000, 999999)}"
 
         session = VerificationSession.objects.create(
-            code=session_code,
+            code=session_id,
+            token=token,
             status='CREATED'
         )
 
+        origin = request.headers.get('Origin') or f"https://{request.get_host()}"
+        qr_url = f"{origin}/verify/mobile/{token}"
         ws_host = request.get_host()
-        ws_url = f"ws://{ws_host}/ws/verification/{session_code}/"
+        ws_url = f"ws://{ws_host}/ws/verification/{session_id}/"
 
         return Response({
             "success": True,
+            "session_id": session.code,
+            "token": session.token,
+            "qr_url": qr_url,
             "session_code": session.code,
             "status": session.status,
             "websocket_url": ws_url
@@ -54,39 +146,52 @@ class CreateVerificationSessionView(APIView):
 
 class GetVerificationSessionView(APIView):
     """
-    GET /api/documents/session/<session_code>/
-    Fetch current session state for cross-device polling / sync
+    GET /api/verification/session/<session_code>/
+    Fetch current session state by session_code or token for cross-device polling / sync
     """
     permission_classes = [AllowAny]
 
     def get(self, request, session_code, *args, **kwargs):
-        try:
-            session = VerificationSession.objects.get(code=session_code)
-            return Response({
-                "code": session.code,
-                "status": session.status,
-                "front_image": session.front_image,
-                "back_image": session.back_image,
-                "selfie_image": session.selfie_image,
-                "updated_at": session.updated_at.isoformat()
-            }, status=status.HTTP_200_OK)
-        except VerificationSession.DoesNotExist:
-            return Response({
-                "error": "Session not found",
-                "code": session_code
-            }, status=status.HTTP_404_NOT_FOUND)
+        session = VerificationSession.objects.filter(code=session_code).first() or \
+                  VerificationSession.objects.filter(token=session_code).first()
+
+        if not session:
+            session = VerificationSession.objects.create(
+                code=session_code,
+                token=uuid.uuid4().hex[:16],
+                status='CREATED'
+            )
+
+        return Response({
+            "session_id": session.code,
+            "code": session.code,
+            "token": session.token,
+            "status": session.status,
+            "front_image": session.front_image,
+            "back_image": session.back_image,
+            "selfie_image": session.selfie_image,
+            "updated_at": session.updated_at.isoformat()
+        }, status=status.HTTP_200_OK)
 
 
 class UpdateVerificationSessionView(APIView):
     """
-    POST /api/documents/session/<session_code>/update/
-    Update session status, front_image, back_image, or selfie_image
+    POST /api/verification/session/<session_code>/update/
+    Update session status, front_image, back_image, or selfie_image and broadcast via Django Channels WebSocket
     """
     permission_classes = [AllowAny]
 
     def post(self, request, session_code, *args, **kwargs):
         try:
-            session, created = VerificationSession.objects.get_or_create(code=session_code)
+            session = VerificationSession.objects.filter(code=session_code).first() or \
+                      VerificationSession.objects.filter(token=session_code).first()
+
+            if not session:
+                session = VerificationSession.objects.create(
+                    code=session_code,
+                    token=uuid.uuid4().hex[:16],
+                    status='CREATED'
+                )
             
             new_status = request.data.get('status')
             front_image = request.data.get('front_image') or request.data.get('frontImage')
@@ -97,15 +202,23 @@ class UpdateVerificationSessionView(APIView):
                 session.status = new_status
             if front_image:
                 session.front_image = front_image
+                if session.status in ['CREATED', 'PHONE_CONNECTED', 'AADHAAR_FRONT_REQUIRED', 'AADHAAR_FRONT_CAPTURED']:
+                    session.status = 'AADHAAR_BACK_REQUIRED'
             if back_image:
                 session.back_image = back_image
+                if session.status in ['AADHAAR_BACK_REQUIRED', 'AADHAAR_BACK_CAPTURED']:
+                    session.status = 'AADHAAR_COMPLETED'
             if selfie_image:
                 session.selfie_image = selfie_image
+                session.status = 'REGISTRATION_COMPLETED'
 
             session.save()
+            broadcast_session_update(session)
 
             return Response({
                 "success": True,
+                "session_id": session.code,
+                "token": session.token,
                 "session": {
                     "code": session.code,
                     "status": session.status,
@@ -120,6 +233,224 @@ class UpdateVerificationSessionView(APIView):
                 "error": f"Failed to update session: {str(e)}",
                 "success": False
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UploadAadhaarView(APIView):
+    """
+    POST /api/verification/aadhaar/
+    Accepts multipart/form-data requests with session_id, side ('front' | 'back'), and document.
+    Validates:
+    1. Session exists
+    2. Session not expired / cancelled
+    3. Correct expected side & workflow state (blocks invalid front -> back -> front regressions)
+    4. Image validity & decodability
+    5. File size (< 10MB limit)
+    6. MIME type
+    """
+    permission_classes = [AllowAny]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def post(self, request, *args, **kwargs):
+        try:
+            session_code = request.data.get('session_id') or request.data.get('session_code') or request.data.get('code')
+            side = (request.data.get('side') or 'front').lower().strip()
+            allow_retry = str(request.data.get('allow_retry') or request.data.get('retry') or '').lower() in ['true', '1']
+
+            image_input = request.FILES.get('document') or request.FILES.get('image') or \
+                          request.data.get('document') or request.data.get('image') or \
+                          request.data.get('image_base64') or request.data.get('front_image') or \
+                          request.data.get('back_image')
+
+            if not session_code:
+                return Response({"error": "session_id is required.", "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
+            session = VerificationSession.objects.filter(code=session_code).first() or \
+                      VerificationSession.objects.filter(token=session_code).first()
+
+            if not session:
+                return Response({"error": "Verification session not found.", "success": False}, status=status.HTTP_404_NOT_FOUND)
+
+            if session.status in ['SESSION_EXPIRED', 'CANCELLED']:
+                return Response({"error": "Verification session has expired or been cancelled.", "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Workflow State Guard (Prevent invalid state regressions like front -> back -> front)
+            if side == 'front':
+                if session.status in ['AADHAAR_BACK_REQUIRED', 'AADHAAR_COMPLETED', 'REGISTRATION_COMPLETED']:
+                    if not allow_retry:
+                        return Response({
+                            "error": "Front side already captured. Expected BACK side. (front -> back -> front sequence rejected)",
+                            "success": False,
+                            "current_status": session.status
+                        }, status=status.HTTP_400_BAD_REQUEST)
+            elif side == 'back':
+                if session.status in ['CREATED', 'PHONE_CONNECTED', 'AADHAAR_FRONT_REQUIRED']:
+                    return Response({
+                        "error": "Please capture the FRONT side of your Aadhaar card first.",
+                        "success": False,
+                        "current_status": session.status
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                elif session.status in ['AADHAAR_COMPLETED', 'REGISTRATION_COMPLETED']:
+                    if not allow_retry:
+                        return Response({
+                            "error": "Aadhaar verification is already complete.",
+                            "success": False,
+                            "current_status": session.status
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not image_input:
+                return Response({"error": "Document image file is required.", "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Server-side validation (< 10MB limit, MIME and decodability check)
+            try:
+                image_bytes, img_format = validate_and_decode_image(image_input)
+            except ValueError as val_err:
+                return Response({"error": str(val_err), "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
+            mime_type = "png" if img_format == "PNG" else "jpeg"
+            base64_img = base64.b64encode(image_bytes).decode('utf-8')
+            data_url = f"data:image/{mime_type};base64,{base64_img}"
+
+            if side == 'back':
+                session.back_image = data_url
+                session.status = 'AADHAAR_COMPLETED'
+            else:
+                session.front_image = data_url
+                session.status = 'AADHAAR_BACK_REQUIRED'
+
+            session.save()
+            broadcast_session_update(session)
+
+            return Response({
+                "success": True,
+                "session_id": session.code,
+                "side": side,
+                "status": session.status,
+                "updated_at": session.updated_at.isoformat()
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": f"Aadhaar upload failed: {str(e)}", "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UploadSelfieView(APIView):
+    """
+    POST /api/verification/selfie/
+    Uploads selfie image, enforces server-side validation (<10MB, MIME check), updates session to REGISTRATION_COMPLETED, and broadcasts via WebSockets.
+    Note: Face Detection != Identity Verification != Liveness
+    """
+    permission_classes = [AllowAny]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def post(self, request, *args, **kwargs):
+        try:
+            session_code = request.data.get('session_code') or request.data.get('session_id') or request.data.get('code')
+            selfie_input = request.FILES.get('image') or request.data.get('selfie_image') or request.data.get('selfieImage') or request.data.get('image') or request.data.get('image_base64')
+
+            if not session_code:
+                return Response({"error": "session_code is required.", "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
+            data_url = None
+            if selfie_input:
+                try:
+                    image_bytes, img_format = validate_and_decode_image(selfie_input)
+                    mime_type = "png" if img_format == "PNG" else "jpeg"
+                    base64_img = base64.b64encode(image_bytes).decode('utf-8')
+                    data_url = f"data:image/{mime_type};base64,{base64_img}"
+                except ValueError as val_err:
+                    return Response({"error": str(val_err), "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
+            session = VerificationSession.objects.filter(code=session_code).first() or \
+                      VerificationSession.objects.filter(token=session_code).first()
+
+            if not session:
+                session = VerificationSession.objects.create(
+                    code=session_code,
+                    token=uuid.uuid4().hex[:16],
+                    status='CREATED'
+                )
+
+            if data_url:
+                session.selfie_image = data_url
+
+            session.status = 'REGISTRATION_COMPLETED'
+            session.save()
+            broadcast_session_update(session)
+
+            return Response({
+                "success": True,
+                "session_id": session.code,
+                "status": session.status,
+                "selfie_image": session.selfie_image,
+                "liveness_disclaimer": "Face Detection != Identity Verification != Liveness (Prototype Face Alignment Only)"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e), "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CompleteVerificationView(APIView):
+    """
+    POST /api/verification/complete/
+    Finalizes verification session and sets status to REGISTRATION_COMPLETED.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            session_code = request.data.get('session_code') or request.data.get('session_id') or request.data.get('code')
+            if not session_code:
+                return Response({"error": "session_code is required.", "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
+            session = VerificationSession.objects.filter(code=session_code).first() or \
+                      VerificationSession.objects.filter(token=session_code).first()
+
+            if not session:
+                return Response({"error": "Verification session not found.", "success": False}, status=status.HTTP_404_NOT_FOUND)
+
+            session.status = 'REGISTRATION_COMPLETED'
+            session.save()
+            broadcast_session_update(session)
+
+            return Response({
+                "success": True,
+                "session_id": session.code,
+                "status": session.status,
+                "message": "Registration verification marked as complete."
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e), "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CancelVerificationSessionView(APIView):
+    """
+    POST /api/verification/session/<session_code>/cancel/
+    Cancels or expires a verification session and broadcasts update to clients.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, session_code, *args, **kwargs):
+        try:
+            session = VerificationSession.objects.filter(code=session_code).first() or \
+                      VerificationSession.objects.filter(token=session_code).first()
+
+            if not session:
+                return Response({"error": "Verification session not found.", "success": False}, status=status.HTTP_404_NOT_FOUND)
+
+            session.status = 'SESSION_EXPIRED'
+            session.save()
+            broadcast_session_update(session)
+
+            return Response({
+                "success": True,
+                "session_id": session.code,
+                "status": session.status,
+                "message": "Verification session cancelled."
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e), "success": False}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 

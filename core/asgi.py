@@ -11,6 +11,9 @@ from channels.routing import (
 from apps.blood_requests.consumers import (
     RequestConsumer
 )
+from ambulance_apps.documents.consumers import (
+    VerificationConsumer
+)
 
 os.environ.setdefault(
     "DJANGO_SETTINGS_MODULE",
@@ -24,6 +27,12 @@ application = ProtocolTypeRouter({
     "http": django_asgi_app,
 
     "websocket": URLRouter([
+
+        # Verification Session WebSocket
+        path(
+            "ws/verification/<str:session_code>/",
+            VerificationConsumer.as_asgi()
+        ),
 
         # Admin Dashboard
         path(

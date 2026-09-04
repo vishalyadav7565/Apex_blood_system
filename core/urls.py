@@ -61,6 +61,12 @@ urlpatterns = [
         include('ambulance_apps.documents.urls')
     ),
 
+    # VERIFICATION SESSIONS (WebSocket & Mobile QR)
+    path(
+        'api/verification/',
+        include('ambulance_apps.documents.urls')
+    ),
+
 
     # ADMIN PANEL
     path(
