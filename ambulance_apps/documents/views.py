@@ -1,5 +1,6 @@
 import base64
 import numpy as np
+import random
 from PIL import Image
 import io
 import re
@@ -8,6 +9,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.permissions import AllowAny
+
+from .models import VerificationSession
 
 try:
     import cv2
@@ -18,6 +22,105 @@ try:
     import pytesseract
 except ImportError:
     pytesseract = None
+
+
+class CreateVerificationSessionView(APIView):
+    """
+    POST /api/documents/session/create/
+    Creates a new real-time verification session code (VERIF-XXXXXX)
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        session_code = f"VERIF-{random.randint(100000, 999999)}"
+        while VerificationSession.objects.filter(code=session_code).exists():
+            session_code = f"VERIF-{random.randint(100000, 999999)}"
+
+        session = VerificationSession.objects.create(
+            code=session_code,
+            status='CREATED'
+        )
+
+        ws_host = request.get_host()
+        ws_url = f"ws://{ws_host}/ws/verification/{session_code}/"
+
+        return Response({
+            "success": True,
+            "session_code": session.code,
+            "status": session.status,
+            "websocket_url": ws_url
+        }, status=status.HTTP_201_CREATED)
+
+
+class GetVerificationSessionView(APIView):
+    """
+    GET /api/documents/session/<session_code>/
+    Fetch current session state for cross-device polling / sync
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, session_code, *args, **kwargs):
+        try:
+            session = VerificationSession.objects.get(code=session_code)
+            return Response({
+                "code": session.code,
+                "status": session.status,
+                "front_image": session.front_image,
+                "back_image": session.back_image,
+                "selfie_image": session.selfie_image,
+                "updated_at": session.updated_at.isoformat()
+            }, status=status.HTTP_200_OK)
+        except VerificationSession.DoesNotExist:
+            return Response({
+                "error": "Session not found",
+                "code": session_code
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+class UpdateVerificationSessionView(APIView):
+    """
+    POST /api/documents/session/<session_code>/update/
+    Update session status, front_image, back_image, or selfie_image
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, session_code, *args, **kwargs):
+        try:
+            session, created = VerificationSession.objects.get_or_create(code=session_code)
+            
+            new_status = request.data.get('status')
+            front_image = request.data.get('front_image') or request.data.get('frontImage')
+            back_image = request.data.get('back_image') or request.data.get('backImage')
+            selfie_image = request.data.get('selfie_image') or request.data.get('selfieImage')
+
+            if new_status:
+                session.status = new_status
+            if front_image:
+                session.front_image = front_image
+            if back_image:
+                session.back_image = back_image
+            if selfie_image:
+                session.selfie_image = selfie_image
+
+            session.save()
+
+            return Response({
+                "success": True,
+                "session": {
+                    "code": session.code,
+                    "status": session.status,
+                    "front_image": session.front_image,
+                    "back_image": session.back_image,
+                    "selfie_image": session.selfie_image,
+                    "updated_at": session.updated_at.isoformat()
+                }
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": f"Failed to update session: {str(e)}",
+                "success": False
+            }, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 def order_points(pts):
