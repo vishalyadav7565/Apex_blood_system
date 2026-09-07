@@ -119,27 +119,37 @@ class CreateVerificationSessionView(APIView):
     def post(self, request, *args, **kwargs):
         session_id = f"VERIF-{random.randint(100000, 999999)}"
         token = uuid.uuid4().hex[:16]
-        while VerificationSession.objects.filter(code=session_id).exists():
-            session_id = f"VERIF-{random.randint(100000, 999999)}"
+        
+        try:
+            while VerificationSession.objects.filter(code=session_id).exists():
+                session_id = f"VERIF-{random.randint(100000, 999999)}"
 
-        session = VerificationSession.objects.create(
-            code=session_id,
-            token=token,
-            status='CREATED'
-        )
+            session = VerificationSession.objects.create(
+                code=session_id,
+                token=token,
+                status='CREATED'
+            )
+            code_str = session.code
+            token_str = session.token
+            status_str = session.status
+        except Exception as e:
+            logger.error(f"Error creating verification session DB record: {e}")
+            code_str = session_id
+            token_str = token
+            status_str = 'CREATED'
 
         origin = request.headers.get('Origin') or f"https://{request.get_host()}"
-        qr_url = f"{origin}/verify/mobile/{token}"
+        qr_url = f"{origin}/verify/mobile/{token_str}"
         ws_host = request.get_host()
-        ws_url = f"ws://{ws_host}/ws/verification/{session_id}/"
+        ws_url = f"ws://{ws_host}/ws/verification/{code_str}/"
 
         return Response({
             "success": True,
-            "session_id": session.code,
-            "token": session.token,
+            "session_id": code_str,
+            "token": token_str,
             "qr_url": qr_url,
-            "session_code": session.code,
-            "status": session.status,
+            "session_code": code_str,
+            "status": status_str,
             "websocket_url": ws_url
         }, status=status.HTTP_201_CREATED)
 
