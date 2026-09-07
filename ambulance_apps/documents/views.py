@@ -5,6 +5,9 @@ from PIL import Image
 import io
 import re
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 from rest_framework.views import APIView
 from rest_framework.response import Response

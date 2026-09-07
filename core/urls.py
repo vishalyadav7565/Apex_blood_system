@@ -42,6 +42,14 @@ urlpatterns = [
         'api/ambulance/',
         include('ambulance_apps.ambulance.urls')
     ),
+    path(
+        'api/ambulances/',
+        include('ambulance_apps.ambulance.urls')
+    ),
+    path(
+        'api/owners/ambulances/',
+        include('ambulance_apps.ambulance.urls')
+    ),
 
     # DRIVERS
     path(
