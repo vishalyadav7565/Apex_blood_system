@@ -16,9 +16,13 @@ urlpatterns = [
     path('session/<str:session_code>/update/', UpdateVerificationSessionView.as_view(), name='update_verification_session'),
     path('session/<str:session_code>/cancel/', CancelVerificationSessionView.as_view(), name='cancel_verification_session'),
     path('aadhaar/', UploadAadhaarView.as_view(), name='upload_aadhaar'),
+    path('aadhaar', UploadAadhaarView.as_view()),
     path('selfie/', UploadSelfieView.as_view(), name='upload_selfie'),
+    path('selfie', UploadSelfieView.as_view()),
     path('complete/', CompleteVerificationView.as_view(), name='complete_verification'),
+    path('complete', CompleteVerificationView.as_view()),
     path('process/', ProcessDocumentView.as_view(), name='process_document'),
+    path('process', ProcessDocumentView.as_view()),
 ]
 
 
