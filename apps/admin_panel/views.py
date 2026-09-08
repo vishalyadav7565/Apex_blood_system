@@ -844,6 +844,17 @@ def update_support_status(request, id):
     })
 
 
+def get_owner_media_url(file_field):
+    if not file_field:
+        return None
+    try:
+        url = file_field.url
+        return url
+    except Exception:
+        val = str(file_field)
+        return val if val else None
+
+
 def serialize_owner_data(owner):
     return {
         "id": owner.id,
@@ -861,10 +872,10 @@ def serialize_owner_data(owner):
         "is_selfie_verified": getattr(owner, 'is_selfie_verified', False),
         "rejection_reason": owner.rejection_reason,
         "aadhaar_number": owner.aadhaar_number,
-        "aadhaar_card": owner.aadhaar_card.url if owner.aadhaar_card else None,
-        "aadhaar_card_back": owner.aadhaar_card_back.url if hasattr(owner, 'aadhaar_card_back') and owner.aadhaar_card_back else None,
-        "business_doc": owner.business_doc.url if owner.business_doc else None,
-        "selfie": owner.selfie.url if owner.selfie else None,
+        "aadhaar_card": get_owner_media_url(owner.aadhaar_card),
+        "aadhaar_card_back": get_owner_media_url(getattr(owner, 'aadhaar_card_back', None)),
+        "business_doc": get_owner_media_url(owner.business_doc),
+        "selfie": get_owner_media_url(owner.selfie),
         "face_match_score": owner.face_match_score,
         "created_at": owner.created_at.isoformat() if owner.created_at else None,
     }

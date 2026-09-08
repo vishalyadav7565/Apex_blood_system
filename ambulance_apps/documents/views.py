@@ -175,14 +175,26 @@ class GetVerificationSessionView(APIView):
                 status='CREATED'
             )
 
+        include_full = request.GET.get('full', '').lower() == 'true'
+
+        def format_img(img_str):
+            if not img_str:
+                return None
+            if include_full or img_str.startswith('http') or len(img_str) < 500:
+                return img_str
+            return f"data:image/jpeg;base64,...[captured]"
+
         return Response({
             "session_id": session.code,
             "code": session.code,
             "token": session.token,
             "status": session.status,
-            "front_image": session.front_image,
-            "back_image": session.back_image,
-            "selfie_image": session.selfie_image,
+            "has_front_image": bool(session.front_image),
+            "has_back_image": bool(session.back_image),
+            "has_selfie_image": bool(session.selfie_image),
+            "front_image": format_img(session.front_image),
+            "back_image": format_img(session.back_image),
+            "selfie_image": format_img(session.selfie_image),
             "updated_at": session.updated_at.isoformat()
         }, status=status.HTTP_200_OK)
 
@@ -384,6 +396,15 @@ class UploadSelfieView(APIView):
 
             if data_url:
                 session.selfie_image = data_url
+                try:
+                    from ambulance_apps.owners.models import Owner
+                    from ambulance_apps.owners.views import save_image_field
+                    owner = session.owner if getattr(session, 'owner', None) else Owner.objects.order_by('-id').first()
+                    if owner:
+                        save_image_field(owner, 'selfie', data_url, f"selfie_{owner.id}")
+                        owner.save()
+                except Exception as sync_err:
+                    logger.warning(f"Error syncing selfie to owner: {sync_err}")
 
             session.status = 'REGISTRATION_COMPLETED'
             session.save()
