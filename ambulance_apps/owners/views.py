@@ -309,10 +309,16 @@ def verify_digilocker(request):
             if not owner:
                 return Response({"detail": f"Owner with ID '{owner_id}' not found."}, status=status.HTTP_404_NOT_FOUND)
 
+    if not owner.is_email_verified or not owner.is_phone_verified:
+        return Response(
+            {"detail": "Email and phone verification must be completed before Aadhaar verification."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     digilocker_code = request.data.get('digilocker_code', f"dl_code_{random.randint(100000, 999999)}")
     aadhaar_front = request.FILES.get('aadhaar_front') or request.FILES.get('aadhaar_card') or request.data.get('aadhaar_front') or request.data.get('aadhaar_card')
     aadhaar_back = request.FILES.get('aadhaar_back') or request.FILES.get('aadhaar_card_back') or request.data.get('aadhaar_back') or request.data.get('aadhaar_card_back')
-    aadhaar_num = request.data.get('aadhaar_number') or owner.aadhaar_number or f"5432-1098-{random.randint(1000,9999)}"
+    aadhaar_num = request.data.get('aadhaar_number') or owner.aadhaar_number or '5432-1098-7654'
 
     if aadhaar_front:
         save_image_field(owner, 'aadhaar_card', aadhaar_front, f"aadhaar_front_{owner.id}")
@@ -364,6 +370,11 @@ def upload_business_documents(request):
         save_image_field(owner, 'business_doc', business_doc, f"business_doc_{owner.id}")
     if selfie:
         save_image_field(owner, 'selfie', selfie, f"selfie_{owner.id}")
+
+    if business_doc:
+        owner.is_business_doc_verified = True
+    if selfie:
+        owner.is_selfie_verified = True
 
     # Simulate face matching verification
     owner.face_match_score = 0.98

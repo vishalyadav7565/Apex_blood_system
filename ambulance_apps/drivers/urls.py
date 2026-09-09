@@ -24,6 +24,7 @@ urlpatterns = [
 
     # Register & Login
     path('register/', register_driver, name='register-driver'),
+    path('register-driver/', register_driver, name='register-driver-legacy'),
     path('login/', login_driver, name='login-driver'),
 
     # Upload Doc & Linking

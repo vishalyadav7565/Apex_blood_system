@@ -70,6 +70,10 @@ urlpatterns = [
         'api/drivers/',
         include('ambulance_apps.drivers.urls')
     ),
+    path(
+        'api/ambulance/drivers/',
+        include('ambulance_apps.drivers.urls')
+    ),
 
     # OWNERS
     path(
