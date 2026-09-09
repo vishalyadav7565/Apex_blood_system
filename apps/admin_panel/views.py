@@ -844,18 +844,55 @@ def update_support_status(request, id):
     })
 
 
-def get_owner_media_url(file_field):
+def get_owner_media_url(file_field, request=None):
     if not file_field:
         return None
     try:
         url = file_field.url
-        return url
     except Exception:
-        val = str(file_field)
-        return val if val else None
+        url = str(file_field) if file_field else None
+
+    if not url:
+        return None
+
+    if url.startswith('http') or url.startswith('data:') or url.startswith('blob:'):
+        return url
+
+    # Ensure path starts with /media/ if relative
+    clean_path = url if url.startswith('/') else f"/{url}"
+    if not clean_path.startswith('/media/'):
+        clean_path = f"/media{clean_path}"
+
+    if request is not None:
+        return request.build_absolute_uri(clean_path)
+
+    return clean_path
 
 
-def serialize_owner_data(owner):
+def serialize_owner_data(owner, request=None):
+    aadhaar_card = owner.aadhaar_card
+    aadhaar_card_back = getattr(owner, 'aadhaar_card_back', None)
+    selfie = owner.selfie
+    business_doc = owner.business_doc
+
+    # Auto-fallback to real-time VerificationSession images if owner record fields are unpopulated
+    if not aadhaar_card or not aadhaar_card_back or not selfie:
+        try:
+            from ambulance_apps.documents.models import VerificationSession
+            vs = VerificationSession.objects.filter(
+                Q(owner=owner) | Q(owner__isnull=True)
+            ).order_by('-updated_at').first()
+
+            if vs:
+                if not aadhaar_card and vs.aadhaar_front:
+                    aadhaar_card = vs.aadhaar_front
+                if not aadhaar_card_back and vs.aadhaar_back:
+                    aadhaar_card_back = vs.aadhaar_back
+                if not selfie and vs.selfie:
+                    selfie = vs.selfie
+        except Exception as sync_err:
+            logger.warning(f"Error fetching verification session fallback images: {sync_err}")
+
     return {
         "id": owner.id,
         "name": owner.name,
@@ -872,10 +909,10 @@ def serialize_owner_data(owner):
         "is_selfie_verified": getattr(owner, 'is_selfie_verified', False),
         "rejection_reason": owner.rejection_reason,
         "aadhaar_number": owner.aadhaar_number,
-        "aadhaar_card": get_owner_media_url(owner.aadhaar_card),
-        "aadhaar_card_back": get_owner_media_url(getattr(owner, 'aadhaar_card_back', None)),
-        "business_doc": get_owner_media_url(owner.business_doc),
-        "selfie": get_owner_media_url(owner.selfie),
+        "aadhaar_card": get_owner_media_url(aadhaar_card, request),
+        "aadhaar_card_back": get_owner_media_url(aadhaar_card_back, request),
+        "business_doc": get_owner_media_url(business_doc, request),
+        "selfie": get_owner_media_url(selfie, request),
         "face_match_score": owner.face_match_score,
         "created_at": owner.created_at.isoformat() if owner.created_at else None,
     }
@@ -889,13 +926,13 @@ def serialize_owner_data(owner):
 def get_ambulance_owners(request):
     if not request.user.is_staff:
         return Response({"error": "Unauthorized"}, status=403)
-    
+
     owners = Owner.objects.all().order_by('-id')
-    
+
     state = request.query_params.get('state')
     district = request.query_params.get('district')
     verification_status = request.query_params.get('verification_status')
-    
+
     if state:
         owners = owners.filter(address__icontains=state)
     if district:
@@ -908,7 +945,7 @@ def get_ambulance_owners(request):
         elif verification_status == 'rejected':
             owners = owners.filter(verification_status='rejected')
 
-    data = [serialize_owner_data(owner) for owner in owners]
+    data = [serialize_owner_data(owner, request) for owner in owners]
     return Response(data)
 
 
@@ -917,12 +954,12 @@ def get_ambulance_owners(request):
 def verify_ambulance_owner(request, id):
     if not request.user.is_staff:
         return Response({"error": "Unauthorized"}, status=403)
-        
+
     owner = get_object_or_404(Owner, id=id)
     action = request.data.get('action', 'approve')
     doc_type = request.data.get('doc_type', 'all')
     reason = request.data.get('reason', '')
-    
+
     if doc_type == 'aadhaar':
         owner.is_aadhaar_verified = (action == 'approve')
     elif doc_type == 'business_doc':
@@ -953,7 +990,7 @@ def verify_ambulance_owner(request, id):
         owner.rejection_reason = reason or f"{doc_type.replace('_', ' ').title()} rejected by Super Admin"
 
     owner.save()
-    return Response(serialize_owner_data(owner))
+    return Response(serialize_owner_data(owner, request))
 
 
 @api_view(['GET'])

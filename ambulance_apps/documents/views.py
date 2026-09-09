@@ -199,6 +199,54 @@ class GetVerificationSessionView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+def sync_session_images_to_owner(session, request_data=None):
+    try:
+        from ambulance_apps.owners.models import Owner
+        from ambulance_apps.owners.views import save_image_field
+
+        owner = None
+        if getattr(session, 'owner', None) and isinstance(session.owner, Owner):
+            owner = session.owner
+
+        if not owner and request_data:
+            owner_id = request_data.get('owner_id')
+            if owner_id:
+                owner = Owner.objects.filter(id=owner_id).first()
+
+        if not owner:
+            owner = Owner.objects.order_by('-id').first()
+
+        if not owner:
+            return
+
+        updated = False
+        if session.aadhaar_front and not owner.aadhaar_card:
+            save_image_field(owner, 'aadhaar_card', session.aadhaar_front, f"aadhaar_front_{owner.id}")
+            updated = True
+        elif session.aadhaar_front:
+            save_image_field(owner, 'aadhaar_card', session.aadhaar_front, f"aadhaar_front_{owner.id}")
+            updated = True
+
+        if session.aadhaar_back and not owner.aadhaar_card_back:
+            save_image_field(owner, 'aadhaar_card_back', session.aadhaar_back, f"aadhaar_back_{owner.id}")
+            updated = True
+        elif session.aadhaar_back:
+            save_image_field(owner, 'aadhaar_card_back', session.aadhaar_back, f"aadhaar_back_{owner.id}")
+            updated = True
+
+        if session.selfie and not owner.selfie:
+            save_image_field(owner, 'selfie', session.selfie, f"selfie_{owner.id}")
+            updated = True
+        elif session.selfie:
+            save_image_field(owner, 'selfie', session.selfie, f"selfie_{owner.id}")
+            updated = True
+
+        if updated:
+            owner.save()
+    except Exception as err:
+        logger.warning(f"Error syncing session images to owner: {err}")
+
+
 class UpdateVerificationSessionView(APIView):
     """
     POST /api/verification/session/<session_code>/update/
@@ -238,6 +286,7 @@ class UpdateVerificationSessionView(APIView):
                 session.status = 'REGISTRATION_COMPLETED'
 
             session.save()
+            sync_session_images_to_owner(session, request.data)
             broadcast_session_update(session)
 
             return Response({
@@ -327,6 +376,7 @@ class UploadAadhaarView(APIView):
                 session.status = 'AADHAAR_BACK_REQUIRED'
 
             session.save()
+            sync_session_images_to_owner(session, request.data)
             broadcast_session_update(session)
 
             return Response({
