@@ -9,9 +9,23 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from apps.users.views import create_support_ticket, firebase_login
+from django.http import JsonResponse
+
+def root_health_check(request):
+    return JsonResponse({
+        "status": "healthy",
+        "service": "Apex Life Saver Backend API",
+        "version": "1.0.0"
+    })
 
 urlpatterns = [
+
+    # ROOT HEALTH CHECK
+    path(
+        '',
+        root_health_check,
+        name='root-health-check'
+    ),
 
     # ADMIN
     path(

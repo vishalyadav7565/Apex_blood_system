@@ -278,7 +278,7 @@ class UploadAadhaarView(APIView):
     def post(self, request, *args, **kwargs):
         try:
             session_code = request.data.get('session_id') or request.data.get('session_code') or request.data.get('code')
-            side = (request.data.get('side') or 'front').lower().strip()
+            requested_side = request.data.get('side')
             allow_retry = str(request.data.get('allow_retry') or request.data.get('retry') or '').lower() in ['true', '1']
 
             image_input = request.FILES.get('document') or request.FILES.get('image') or \
@@ -298,29 +298,13 @@ class UploadAadhaarView(APIView):
             if session.status in ['SESSION_EXPIRED', 'CANCELLED']:
                 return Response({"error": "Verification session has expired or been cancelled.", "success": False}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Workflow State Guard (Prevent invalid state regressions like front -> back -> front)
-            if side == 'front':
-                if session.status in ['AADHAAR_BACK_REQUIRED', 'AADHAAR_COMPLETED', 'REGISTRATION_COMPLETED']:
-                    if not allow_retry:
-                        return Response({
-                            "error": "Front side already captured. Expected BACK side. (front -> back -> front sequence rejected)",
-                            "success": False,
-                            "current_status": session.status
-                        }, status=status.HTTP_400_BAD_REQUEST)
-            elif side == 'back':
-                if session.status in ['CREATED', 'PHONE_CONNECTED', 'AADHAAR_FRONT_REQUIRED']:
-                    return Response({
-                        "error": "Please capture the FRONT side of your Aadhaar card first.",
-                        "success": False,
-                        "current_status": session.status
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                elif session.status in ['AADHAAR_COMPLETED', 'REGISTRATION_COMPLETED']:
-                    if not allow_retry:
-                        return Response({
-                            "error": "Aadhaar verification is already complete.",
-                            "success": False,
-                            "current_status": session.status
-                        }, status=status.HTTP_400_BAD_REQUEST)
+            # Smart Side Resolution: Infer 'back' if 'front' was already captured and side is omitted
+            if requested_side:
+                side = str(requested_side).lower().strip()
+            elif session.status in ['AADHAAR_BACK_REQUIRED', 'AADHAAR_BACK_CAPTURED'] or session.aadhaar_front:
+                side = 'back'
+            else:
+                side = 'front'
 
             if not image_input:
                 return Response({"error": "Document image file is required.", "success": False}, status=status.HTTP_400_BAD_REQUEST)
