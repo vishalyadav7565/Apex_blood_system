@@ -38,10 +38,11 @@ DEBUG = os.getenv(
     "True"
 ) == "True"
 
-ALLOWED_HOSTS = os.getenv(
-    "ALLOWED_HOSTS",
-    "*"
-).split(",")
+allowed_env = os.getenv("ALLOWED_HOSTS", "*")
+ALLOWED_HOSTS = [h.strip() for h in allowed_env.split(",") if h.strip()]
+for internal_host in ["localhost", "127.0.0.1", "0.0.0.0", "web"]:
+    if internal_host not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(internal_host)
 
 
 # =====================================================
@@ -519,7 +520,7 @@ SESSION_COOKIE_SECURE = not DEBUG
 # =====================================================
 if not DEBUG:
 
-    SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "False") == "True"
 
     SECURE_HSTS_SECONDS = 31536000
 
