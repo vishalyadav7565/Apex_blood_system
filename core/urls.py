@@ -126,13 +126,17 @@ try:
 except ImportError:
     pass
 
-# MEDIA & STATIC FILES
+# MEDIA & STATIC FILES (SERVE UNCONDITIONALLY FOR PRODUCTION & DOCKER DEPLOYMENTS)
+from django.views.static import serve
+from django.urls import re_path
+
+urlpatterns += [
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+    re_path(r'^api/media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+]
+
 if settings.DEBUG:
     from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-
-    urlpatterns += static(
-        settings.MEDIA_URL,
-        document_root=settings.MEDIA_ROOT
-    )
     urlpatterns += staticfiles_urlpatterns()
+
 

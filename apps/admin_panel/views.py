@@ -861,15 +861,21 @@ def get_owner_media_url(file_field, request=None):
     if url.startswith('http') or url.startswith('data:') or url.startswith('blob:'):
         return url
 
-    # Ensure path starts with /media/ if relative
-    clean_path = url if url.startswith('/') else f"/{url}"
-    if not clean_path.startswith('/media/'):
-        clean_path = f"/media{clean_path}"
+    clean_path = url.lstrip('/')
+    if clean_path.startswith('api/media/'):
+        clean_path = clean_path[len('api/media/'):]
+    elif clean_path.startswith('media/'):
+        clean_path = clean_path[len('media/'):]
+
+    full_path = f"/api/media/{clean_path}"
 
     if request is not None:
-        return request.build_absolute_uri(clean_path)
+        host = request.get_host()
+        if 'localhost' in host or '127.0.0.1' in host or 'web' in host:
+            return f"https://api.apexlifesaver.com{full_path}"
+        return request.build_absolute_uri(full_path)
 
-    return clean_path
+    return f"https://api.apexlifesaver.com{full_path}"
 
 
 def serialize_owner_data(owner, request=None):
