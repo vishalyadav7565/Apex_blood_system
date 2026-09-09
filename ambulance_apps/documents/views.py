@@ -144,7 +144,12 @@ class CreateVerificationSessionView(APIView):
         origin = request.headers.get('Origin') or f"https://{request.get_host()}"
         qr_url = f"{origin}/verify/mobile/{token_str}"
         ws_host = request.get_host()
-        ws_url = f"ws://{ws_host}/ws/verification/{code_str}/"
+        # Browsers block insecure ws:// connections when the portal is served
+        # over HTTPS. Honour a reverse proxy's forwarded scheme in production.
+        forwarded_proto = request.headers.get('X-Forwarded-Proto', '').split(',')[0].strip()
+        is_secure = request.is_secure() or forwarded_proto == 'https'
+        ws_scheme = 'wss' if is_secure else 'ws'
+        ws_url = f"{ws_scheme}://{ws_host}/ws/verification/{code_str}/"
 
         return Response({
             "success": True,

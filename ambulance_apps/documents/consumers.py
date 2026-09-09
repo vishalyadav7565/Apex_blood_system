@@ -13,16 +13,6 @@ class VerificationConsumer(AsyncJsonWebsocketConsumer):
         )
         await self.accept()
 
-        # Emit PHONE_CONNECTED event upon connection
-        await self.channel_layer.group_send(
-            self.group_name,
-            {
-                "type": "verification_status",
-                "status": "PHONE_CONNECTED",
-                "session_code": self.session_code
-            }
-        )
-
     async def disconnect(self, close_code):
         print(f"❌ WS DISCONNECTED VERIFICATION SESSION: {self.session_code}")
         # Broadcast PHONE_DISCONNECTED to inform Desktop (Requirement 41)
