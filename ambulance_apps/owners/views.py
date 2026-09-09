@@ -162,21 +162,23 @@ def register_owner(request):
     Step 1: Provide owner and company details.
     Creates an unverified Owner record and generates + sends Mobile and Email OTPs.
     """
-    serializer = OwnerRegisterSerializer(data=request.data)
-    if serializer.is_valid():
-        email = serializer.validated_data['email']
-        phone = serializer.validated_data['phone']
+    email = request.data.get('email')
+    phone = request.data.get('phone')
 
-        # Check if verified owner already exists
-        if Owner.objects.filter(email=email, is_verified=True).exists():
-            return Response({"email": ["An owner with this email already exists and is verified."]}, status=status.HTTP_400_BAD_REQUEST)
-        if Owner.objects.filter(phone=phone, is_verified=True).exists():
-            return Response({"phone": ["An owner with this phone already exists and is verified."]}, status=status.HTTP_400_BAD_REQUEST)
+    # Check if verified owner already exists
+    if email and Owner.objects.filter(email=email, is_verified=True).exists():
+        return Response({"email": ["An owner with this email already exists and is verified."]}, status=status.HTTP_400_BAD_REQUEST)
+    if phone and Owner.objects.filter(phone=phone, is_verified=True).exists():
+        return Response({"phone": ["An owner with this phone already exists and is verified."]}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Remove existing unverified record if retrying registration
+    # Remove existing unverified record if retrying registration before running serializer validation
+    if email:
         Owner.objects.filter(email=email, is_verified=False).delete()
+    if phone:
         Owner.objects.filter(phone=phone, is_verified=False).delete()
 
+    serializer = OwnerRegisterSerializer(data=request.data)
+    if serializer.is_valid():
         owner = serializer.save()
         owner.verification_status = "pending_verification"
         owner.is_verified = False
