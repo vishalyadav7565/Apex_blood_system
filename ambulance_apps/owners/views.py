@@ -1,4 +1,5 @@
 import random
+import re
 from datetime import timedelta
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -162,8 +163,14 @@ def register_owner(request):
     Step 1: Provide owner and company details.
     Creates an unverified Owner record and generates + sends Mobile and Email OTPs.
     """
-    email = request.data.get('email')
-    phone = request.data.get('phone')
+    payload = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+    email = payload.get('email', '').strip() if isinstance(payload.get('email'), str) else ''
+    phone = payload.get('phone', '').strip() if isinstance(payload.get('phone'), str) else ''
+
+    if phone:
+        # Remove spaces, hyphens, and parentheses from phone number
+        phone = re.sub(r'[^\d+]', '', phone)
+        payload['phone'] = phone
 
     # Check if verified owner already exists
     if email and Owner.objects.filter(email=email, is_verified=True).exists():
@@ -177,7 +184,7 @@ def register_owner(request):
     if phone:
         Owner.objects.filter(phone=phone, is_verified=False).delete()
 
-    serializer = OwnerRegisterSerializer(data=request.data)
+    serializer = OwnerRegisterSerializer(data=payload)
     if serializer.is_valid():
         owner = serializer.save()
         owner.verification_status = "pending_verification"
@@ -210,6 +217,8 @@ def register_owner(request):
             },
             status=status.HTTP_201_CREATED
         )
+    
+    print(f"❌ [Owner Registration Failed] Errors: {serializer.errors} | Data: {payload}")
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

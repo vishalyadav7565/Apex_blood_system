@@ -27,9 +27,18 @@ class Migration(migrations.Migration):
                     ALTER TABLE "verification_session" ADD COLUMN IF NOT EXISTS "completed_at" timestamp with time zone NULL;
                     
                     -- Backfill from legacy columns if present
-                    UPDATE "verification_session" SET "aadhaar_front" = "front_image" WHERE "aadhaar_front" IS NULL AND "front_image" IS NOT NULL;
-                    UPDATE "verification_session" SET "aadhaar_back" = "back_image" WHERE "aadhaar_back" IS NULL AND "back_image" IS NOT NULL;
-                    UPDATE "verification_session" SET "selfie" = "selfie_image" WHERE "selfie" IS NULL AND "selfie_image" IS NOT NULL;
+                    DO $$
+                    BEGIN
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'verification_session' AND column_name = 'front_image') THEN
+                            EXECUTE 'UPDATE "verification_session" SET "aadhaar_front" = "front_image" WHERE "aadhaar_front" IS NULL AND "front_image" IS NOT NULL';
+                        END IF;
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'verification_session' AND column_name = 'back_image') THEN
+                            EXECUTE 'UPDATE "verification_session" SET "aadhaar_back" = "back_image" WHERE "aadhaar_back" IS NULL AND "back_image" IS NOT NULL';
+                        END IF;
+                        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'verification_session' AND column_name = 'selfie_image') THEN
+                            EXECUTE 'UPDATE "verification_session" SET "selfie" = "selfie_image" WHERE "selfie" IS NULL AND "selfie_image" IS NOT NULL';
+                        END IF;
+                    END $$;
                     ''',
                     reverse_sql='SELECT 1;'
                 ),
