@@ -1,6 +1,9 @@
+import logging
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Q
+
+logger = logging.getLogger(__name__)
 import pandas as pd
 import numpy as np
 from apps.blood_requests.models import BloodRequest
@@ -879,9 +882,7 @@ def serialize_owner_data(owner, request=None):
     if not aadhaar_card or not aadhaar_card_back or not selfie:
         try:
             from ambulance_apps.documents.models import VerificationSession
-            vs = VerificationSession.objects.filter(
-                Q(owner=owner) | Q(owner__isnull=True)
-            ).order_by('-updated_at').first()
+            vs = VerificationSession.objects.order_by('-updated_at').first()
 
             if vs:
                 if not aadhaar_card and vs.aadhaar_front:
