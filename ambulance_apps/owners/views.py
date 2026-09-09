@@ -174,9 +174,13 @@ def register_owner(request):
 
     # Check if verified owner already exists
     if email and Owner.objects.filter(email=email, is_verified=True).exists():
-        return Response({"email": ["An owner with this email already exists and is verified."]}, status=status.HTTP_400_BAD_REQUEST)
+        msg = {"email": ["An owner with this email already exists and is verified."]}
+        print(f"❌ [Owner Registration Failed] {msg}")
+        return Response(msg, status=status.HTTP_400_BAD_REQUEST)
     if phone and Owner.objects.filter(phone=phone, is_verified=True).exists():
-        return Response({"phone": ["An owner with this phone already exists and is verified."]}, status=status.HTTP_400_BAD_REQUEST)
+        msg = {"phone": ["An owner with this phone already exists and is verified."]}
+        print(f"❌ [Owner Registration Failed] {msg}")
+        return Response(msg, status=status.HTTP_400_BAD_REQUEST)
 
     # Remove existing unverified record if retrying registration before running serializer validation
     if email:
