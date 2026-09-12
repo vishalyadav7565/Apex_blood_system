@@ -8,6 +8,13 @@ from channels.routing import (
     URLRouter
 )
 
+os.environ.setdefault(
+    "DJANGO_SETTINGS_MODULE",
+    "core.settings"
+)
+
+django_asgi_app = get_asgi_application()
+
 from apps.blood_requests.consumers import (
     RequestConsumer
 )
@@ -15,13 +22,6 @@ from ambulance_apps.documents.consumers import (
     VerificationConsumer
 )
 from ambulance_apps.drivers.consumers import DriverConsumer
-
-os.environ.setdefault(
-    "DJANGO_SETTINGS_MODULE",
-    "core.settings"
-)
-
-django_asgi_app = get_asgi_application()
 
 application = ProtocolTypeRouter({
 
