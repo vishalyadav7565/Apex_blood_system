@@ -21,6 +21,7 @@ from ambulance_apps.drivers.verification import verify_driver_documents
 from ambulance_apps.drivers.validators import lookup_pincode
 from ambulance_apps.trips.models import Trip
 from ambulance_apps.trips.serializers import TripSerializer
+from apps.users.firebase_utils import verify_firebase_token
 
 
 DRIVER_TRIP_STATUSES = {'started', 'reached_pickup', 'picked_up', 'completed', 'rejected'}
@@ -31,6 +32,41 @@ TRIP_STATUS_TRANSITIONS = {
     'reached_pickup': {'picked_up', 'rejected'},
     'picked_up': {'completed', 'rejected'},
 }
+
+
+def _firebase_phone(decoded_token):
+    phone = decoded_token.get('phone_number')
+    if not phone:
+        return None
+    digits = ''.join(character for character in phone if character.isdigit())
+    if len(digits) == 12 and digits.startswith('91'):
+        return digits[2:]
+    if len(digits) == 11 and digits.startswith('0'):
+        return digits[1:]
+    return digits
+
+
+def _firebase_driver_auth(request):
+    id_token = request.data.get('id_token')
+    if not id_token:
+        return None, Response({'detail': 'Firebase ID token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    decoded_token = verify_firebase_token(id_token)
+    if not decoded_token or not decoded_token.get('uid'):
+        return None, Response({'detail': 'Invalid or expired Firebase ID token.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    phone = _firebase_phone(decoded_token)
+    if not phone:
+        return None, Response({'detail': 'Firebase token does not contain a verified phone number.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    return {'uid': decoded_token['uid'], 'phone': phone}, None
+
+
+def _driver_login_response(driver, id_token):
+    return {
+        'token': id_token,
+        'driver': DriverSerializer(driver).data,
+    }
 
 
 def _send_realtime_event(group_name, data):
@@ -175,6 +211,69 @@ def login_driver(request):
             'driver': serializer.data
         }, status=status.HTTP_200_OK)
     return Response({'detail': 'Invalid credentials.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_driver_firebase(request):
+    firebase_auth, error = _firebase_driver_auth(request)
+    if error:
+        return error
+
+    if Driver.objects.filter(firebase_uid=firebase_auth['uid']).exists():
+        return Response({'detail': 'This Firebase phone account is already registered.'}, status=status.HTTP_409_CONFLICT)
+    if Driver.objects.filter(phone=firebase_auth['phone']).exists():
+        return Response({'detail': 'A driver with this phone number already exists. Please log in.'}, status=status.HTTP_409_CONFLICT)
+
+    payload = request.data.copy()
+    payload.pop('id_token', None)
+    payload['phone'] = firebase_auth['phone']
+    payload['password'] = f"firebase:{firebase_auth['uid']}"
+
+    serializer = DriverSerializer(data=payload)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    driver = serializer.save(firebase_uid=firebase_auth['uid'], is_phone_verified=True)
+    return Response({
+        'message': 'Driver registered successfully with Firebase phone verification.',
+        'driver': DriverSerializer(driver).data,
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_driver_firebase(request):
+    firebase_auth, error = _firebase_driver_auth(request)
+    if error:
+        return error
+
+    driver = Driver.objects.filter(firebase_uid=firebase_auth['uid']).first()
+    if not driver:
+        driver = Driver.objects.filter(phone=firebase_auth['phone']).first()
+        if driver:
+            driver.firebase_uid = firebase_auth['uid']
+            driver.is_phone_verified = True
+            driver.save(update_fields=['firebase_uid', 'is_phone_verified', 'updated_at'])
+
+    if not driver:
+        return Response({'detail': 'No driver is registered with this phone number.', 'registered': False}, status=status.HTTP_404_NOT_FOUND)
+
+    if not driver.is_verified:
+        status_msgs = {
+            'pending_owner_review': 'Your profile is pending approval from the ambulance owner.',
+            'approved_by_owner': 'Approved by owner. Waiting for system admin verification.',
+            'rejected_by_owner': 'Your registration was rejected by the owner.',
+            'pending_admin_review': 'Waiting for system admin verification.',
+            'rejected_by_admin': 'Your registration was rejected by the admin.',
+        }
+        return Response({
+            'detail': status_msgs.get(driver.verification_status, 'Your account is pending verification.'),
+            'verification_status': driver.verification_status,
+            'is_verified': False,
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    return Response(_driver_login_response(driver, request.data['id_token']), status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])

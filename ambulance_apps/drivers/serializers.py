@@ -14,11 +14,13 @@ class DriverSerializer(serializers.ModelSerializer):
             'father_name', 'gender', 'date_of_birth', 'pincode', 'state', 'district', 'complete_address',
             'fcm_token', 'is_verified', 'verification_status', 'owner_reviewed_at', 'admin_reviewed_at',
             'rejection_reason', 'review_notes', 'is_online', 'current_latitude', 'current_longitude',
-            'last_location_update', 'aadhaar_ocr_data', 'dl_ocr_data', 'face_match_score', 'created_at'
+            'last_location_update', 'aadhaar_ocr_data', 'dl_ocr_data', 'face_match_score', 'created_at',
+            'is_phone_verified'
         ]
         extra_kwargs = {
             'password': {'write_only': True},
             'ambulance': {'required': False},
+            'is_phone_verified': {'read_only': True},
         }
 
     def validate(self, attrs):

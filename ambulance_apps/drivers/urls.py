@@ -3,6 +3,8 @@ from django.urls import path
 from .views import (
     register_driver,
     login_driver,
+    register_driver_firebase,
+    login_driver_firebase,
     upload_document,
     link_ambulance,
     owner_review,
@@ -26,6 +28,8 @@ urlpatterns = [
     path('register/', register_driver, name='register-driver'),
     path('register-driver/', register_driver, name='register-driver-legacy'),
     path('login/', login_driver, name='login-driver'),
+    path('firebase/register/', register_driver_firebase, name='firebase-register-driver'),
+    path('firebase/login/', login_driver_firebase, name='firebase-login-driver'),
 
     # Upload Doc & Linking
     path('upload-doc/', upload_document, name='upload-document'),

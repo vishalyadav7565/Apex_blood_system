@@ -14,6 +14,8 @@ class Driver(models.Model):
 
     name = models.CharField(max_length=150)
     phone = models.CharField(max_length=15, unique=True)
+    firebase_uid = models.CharField(max_length=128, unique=True, blank=True, null=True)
+    is_phone_verified = models.BooleanField(default=False)
     email = models.EmailField(blank=True, null=True)
     password = models.CharField(max_length=255)
     father_name = models.CharField(max_length=150, blank=True, null=True)
