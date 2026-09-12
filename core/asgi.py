@@ -14,6 +14,7 @@ from apps.blood_requests.consumers import (
 from ambulance_apps.documents.consumers import (
     VerificationConsumer
 )
+from ambulance_apps.drivers.consumers import DriverConsumer
 
 os.environ.setdefault(
     "DJANGO_SETTINGS_MODULE",
@@ -44,6 +45,10 @@ application = ProtocolTypeRouter({
         path(
             "ws/hospital/<int:hospital_id>/",
             RequestConsumer.as_asgi()
+        ),
+        path(
+            "ws/driver/<int:driver_id>/",
+            DriverConsumer.as_asgi()
         ),
         path(
             "ws/requests/hospital/<int:hospital_id>/",

@@ -1,10 +1,15 @@
 from unittest.mock import patch
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from channels.testing import WebsocketCommunicator
+from core.asgi import application
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from ambulance_apps.drivers.models import Driver
 from ambulance_apps.ambulance.models import Ambulance
 from apps.hospitals.models import Hospital
+from ambulance_apps.trips.models import Trip
 
 
 class PincodeLookupTests(TestCase):
@@ -100,3 +105,108 @@ class DriverAPITests(APITestCase):
         self.assertIsNotNone(driver.aadhaar_ocr_data)
         self.assertEqual(driver.aadhaar_number, "123456789012")
         self.assertEqual(driver.face_match_score, 0.93)
+
+    def test_live_tracking_profile_and_trip_lifecycle(self):
+        driver = Driver.objects.create(
+            name='Live Driver',
+            phone='9111111111',
+            password='secure',
+        )
+
+        response = self.client.post(
+            '/api/ambulance/drivers/update-status/',
+            {
+                'driver_id': driver.id,
+                'is_online': True,
+                'latitude': 19.076,
+                'longitude': 72.8777,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['is_online'])
+
+        response = self.client.post(
+            '/api/ambulance/drivers/update-location/',
+            {'driver_id': driver.id, 'latitude': 19.08, 'longitude': 72.88},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        driver.refresh_from_db()
+        self.assertEqual(driver.current_latitude, 19.08)
+
+        response = self.client.get(f'/api/ambulance/drivers/profile/{driver.id}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('verification', response.data)
+        self.assertIn('ambulance_details', response.data)
+
+        trip = Trip.objects.create(
+            driver=driver,
+            ambulance_type='ALS',
+            status='accepted',
+            patient_name='Patient One',
+            patient_phone='9222222222',
+            pickup_address='Pickup',
+            destination_address='Hospital',
+        )
+        response = self.client.get(f'/api/ambulance/drivers/active-trip/{driver.id}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['trip_id'], trip.id)
+        self.assertIn('patient_age', response.data)
+        self.assertIn('payment', response.data)
+
+        response = self.client.post(
+            f'/api/ambulance/drivers/trip/{trip.id}/update-status/',
+            {'status': 'started'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'started')
+
+        response = self.client.post(
+            f'/api/ambulance/drivers/trip/{trip.id}/update-status/',
+            {'status': 'completed'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 409)
+
+    def test_update_status_rejects_partial_coordinates(self):
+        driver = Driver.objects.create(
+            name='Validation Driver',
+            phone='9333333333',
+            password='secure',
+        )
+        response = self.client.post(
+            '/api/ambulance/drivers/update-status/',
+            {
+                'driver_id': driver.id,
+                'is_online': True,
+                'latitude': 19.076,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_driver_websocket_receives_new_request(self):
+        driver = Driver.objects.create(
+            name='Socket Driver',
+            phone='9444444444',
+            password='secure',
+            is_online=True,
+        )
+        async_to_sync(self._assert_driver_socket_receives_event)(driver.id)
+
+    async def _assert_driver_socket_receives_event(self, driver_id):
+        communicator = WebsocketCommunicator(application, f'/ws/driver/{driver_id}/')
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+        await get_channel_layer().group_send(
+            'drivers_online',
+            {
+                'type': 'send_update',
+                'data': {'event': 'NEW_REQUEST', 'trip': {'trip_id': 42}},
+            },
+        )
+        message = await communicator.receive_json_from()
+        self.assertEqual(message['event'], 'NEW_REQUEST')
+        await communicator.disconnect()

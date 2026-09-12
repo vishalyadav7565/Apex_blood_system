@@ -22,6 +22,18 @@ class DriverSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
+        phone = attrs.get('phone')
+        if phone and Driver.objects.filter(phone=phone).exists():
+            raise serializers.ValidationError({
+                'phone': 'A driver with this phone number is already registered. Please log in or use another number.'
+            })
+
+        license_number = attrs.get('license_number')
+        if license_number and Driver.objects.filter(license_number=license_number).exists():
+            raise serializers.ValidationError({
+                'license_number': 'A driver with this licence number is already registered.'
+            })
+
         ambulance_number = attrs.pop('ambulance_number', None)
         if ambulance_number:
             ambulance = Ambulance.objects.filter(vehicle_number=ambulance_number).first()

@@ -65,6 +65,12 @@ urlpatterns = [
         include('ambulance_apps.ambulance.urls')
     ),
 
+    # AMBULANCE BOOKINGS
+    path(
+        'api/ambulance/bookings/',
+        include('ambulance_apps.trips.urls')
+    ),
+
     # DRIVERS
     path(
         'api/drivers/',
