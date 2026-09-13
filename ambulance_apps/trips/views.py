@@ -17,6 +17,7 @@ from rest_framework.response import Response
 
 from ambulance_apps.ambulance.models import Ambulance
 from ambulance_apps.drivers.models import Driver
+from ambulance_apps.trips.models import Trip
 from ambulance_apps.trips.serializers import BookingCreateSerializer, TripSerializer
 
 
