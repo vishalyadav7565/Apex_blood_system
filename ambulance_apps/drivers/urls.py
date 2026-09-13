@@ -16,6 +16,8 @@ from .views import (
     update_status,
     update_location,
     active_trip,
+    driver_stats,
+    driver_trips,
     update_trip_status,
 )
 
@@ -48,6 +50,8 @@ urlpatterns = [
     path('update-location/', update_location, name='update-location'),
 
     # Trip handling
+    path('stats/<int:driver_id>/', driver_stats, name='driver-stats'),
+    path('trips/<int:driver_id>/', driver_trips, name='driver-trips'),
     path('active-trip/<int:driver_id>/', active_trip, name='active-trip'),
     path('trip/<int:trip_id>/update-status/', update_trip_status, name='update-trip-status'),
 ]

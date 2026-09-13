@@ -508,6 +508,9 @@ def driver_profile(request, driver_id):
             'ambulance_type': driver.ambulance.ambulance_type,
             'status': driver.ambulance.status,
             'is_available': driver.ambulance.is_available,
+            'is_active': driver.ambulance.is_active,
+            'is_approved': driver.ambulance.is_approved,
+            'approval_status': driver.ambulance.approval_status,
         }
     return Response(data, status=status.HTTP_200_OK)
 
@@ -710,6 +713,28 @@ def active_trip(request, driver_id):
         return Response({'detail': 'No active trip found for this driver.', 'trip': None}, status=status.HTTP_404_NOT_FOUND)
         
     return Response(_trip_response(trip), status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def driver_stats(request, driver_id):
+    get_object_or_404(Driver, id=driver_id)
+    trips = Trip.objects.filter(driver_id=driver_id)
+    return Response({
+        'driver_id': driver_id,
+        'total_trips': trips.count(),
+        'completed_trips': trips.filter(status='completed').count(),
+        'active_trips': trips.exclude(status__in=['completed', 'cancelled', 'rejected']).count(),
+        'pending_requests': trips.filter(status='requested').count(),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def driver_trips(request, driver_id):
+    get_object_or_404(Driver, id=driver_id)
+    trips = Trip.objects.filter(driver_id=driver_id).order_by('-created_at')
+    return Response({'trips': [_trip_response(trip) for trip in trips]})
 
 
 @api_view(['POST'])
