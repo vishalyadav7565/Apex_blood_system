@@ -681,6 +681,12 @@ def update_location(request):
     driver.last_location_update = timezone.now()
     driver.save(update_fields=['current_latitude', 'current_longitude', 'last_location_update'])
 
+    if driver.ambulance and driver.is_online and driver.ambulance.status != 'busy':
+        ambulance = driver.ambulance
+        ambulance.status = 'online'
+        ambulance.is_available = True
+        ambulance.save(update_fields=['status', 'is_available', 'updated_at'])
+
     location_data = {
         'event': 'AMBULANCE_LOCATION_UPDATED',
         'driver_id': driver.id,

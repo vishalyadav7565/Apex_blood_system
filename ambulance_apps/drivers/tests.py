@@ -111,6 +111,7 @@ class DriverAPITests(APITestCase):
             name='Live Driver',
             phone='9111111111',
             password='secure',
+            ambulance=self.ambulance,
         )
 
         response = self.client.post(
@@ -137,6 +138,9 @@ class DriverAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         driver.refresh_from_db()
         self.assertEqual(driver.current_latitude, 19.08)
+        driver.ambulance.refresh_from_db()
+        self.assertEqual(driver.ambulance.status, 'online')
+        self.assertTrue(driver.ambulance.is_available)
 
         response = self.client.get(f'/api/ambulance/drivers/profile/{driver.id}/')
         self.assertEqual(response.status_code, 200)
