@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from apps.users.models import OTP
 from apps.users.firebase_utils import verify_firebase_token
 from ambulance_apps.owners.models import Owner, EmailOTP
+from ambulance_apps.drivers.models import Driver
 
 from ambulance_apps.owners.serializers import (
     OwnerSerializer,
@@ -493,6 +494,77 @@ def owner_profile(request, owner_id):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def owner_drivers(request):
+    owner_id = request.query_params.get('owner_id')
+    if not owner_id:
+        return Response({'detail': 'owner_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    get_object_or_404(Owner, id=owner_id)
+    drivers = Driver.objects.filter(ambulance__owner_id=owner_id).select_related('ambulance').order_by('-id')
+    return Response([
+        {
+            'id': driver.id,
+            'name': driver.name,
+            'phone': driver.phone,
+            'email': driver.email,
+            'gender': driver.gender,
+            'date_of_birth': driver.date_of_birth,
+            'pincode': driver.pincode,
+            'state': driver.state,
+            'district': driver.district,
+            'complete_address': driver.complete_address,
+            'license_number': driver.license_number,
+            'license_expiry': driver.license_expiry.isoformat() if driver.license_expiry else None,
+            'aadhaar_number': driver.aadhaar_number,
+            'aadhaar_card': driver.aadhaar_card.url if driver.aadhaar_card else None,
+            'driving_licence': driver.driving_licence.url if driver.driving_licence else None,
+            'photo': driver.photo.url if driver.photo else None,
+            'profile_photo': driver.profile_photo.url if driver.profile_photo else None,
+            'face_match_score': driver.face_match_score,
+            'is_verified': driver.is_verified,
+            'verification_status': driver.verification_status,
+            'rejection_reason': driver.rejection_reason,
+            'review_notes': driver.review_notes,
+            'created_at': driver.created_at.isoformat() if driver.created_at else None,
+            'ambulance': {
+                'id': driver.ambulance.id,
+                'vehicle_number': driver.ambulance.vehicle_number,
+                'ambulance_type': driver.ambulance.ambulance_type,
+            } if driver.ambulance else None,
+        }
+        for driver in drivers
+    ])
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def owner_review_driver(request, driver_id):
+    owner_id = request.data.get('owner_id')
+    action = (request.data.get('action') or '').lower()
+    if not owner_id or action not in {'approve', 'reject'}:
+        return Response(
+            {'detail': 'owner_id and action (approve or reject) are required.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    get_object_or_404(Owner, id=owner_id)
+    driver = get_object_or_404(
+        Driver.objects.select_related('ambulance'),
+        id=driver_id,
+        ambulance__owner_id=owner_id,
+    )
+    driver.verification_status = 'approved_by_owner' if action == 'approve' else 'rejected_by_owner'
+    driver.is_verified = action == 'approve'
+    driver.owner_reviewed_at = timezone.now()
+    driver.rejection_reason = None if action == 'approve' else (request.data.get('reason') or 'Rejected by owner')
+    driver.save(update_fields=[
+        'verification_status', 'is_verified', 'owner_reviewed_at', 'rejection_reason', 'updated_at',
+    ])
+    return Response({'id': driver.id, 'verification_status': driver.verification_status, 'is_verified': driver.is_verified})
 
 
 @api_view(['POST'])

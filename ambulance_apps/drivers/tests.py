@@ -125,6 +125,9 @@ class DriverAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data['is_online'])
+        driver.ambulance.refresh_from_db()
+        self.assertEqual(driver.ambulance.status, 'online')
+        self.assertTrue(driver.ambulance.is_available)
 
         response = self.client.post(
             '/api/ambulance/drivers/update-location/',

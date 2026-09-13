@@ -97,6 +97,23 @@ class CreateBookingTests(APITestCase):
         self.assertEqual(response.data['trip']['driver_details']['name'], self.driver.name)
         self.assertLessEqual(response.data['driver_distance_km'], 20)
 
+    def test_create_booking_by_ambulance_type_includes_driver_at_twenty_km_boundary(self):
+        response = self.client.post(
+            '/api/ambulance/bookings/',
+            {
+                'ambulance_type': 'BLS',
+                'patient_name': 'Boundary Patient',
+                'pickup_address': '12 Pickup Road',
+                'destination_address': 'City Hospital',
+                'pickup_latitude': 19.0760,
+                'pickup_longitude': 73.0670,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertLessEqual(response.data['driver_distance_km'], 20)
+
     def test_booking_history_splits_live_and_past_bookings(self):
         live_trip = Trip.objects.create(
             driver=self.driver,

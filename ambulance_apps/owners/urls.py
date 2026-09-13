@@ -7,6 +7,8 @@ from .views import (
     login_owner_request,
     login_owner_verify,
     owner_profile,
+    owner_drivers,
+    owner_review_driver,
     admin_approve_owner,
     verify_firebase_email_otp,
     login_owner_firebase,
@@ -31,6 +33,8 @@ urlpatterns = [
 
     # Profile flow
     path('profile/<int:owner_id>/', owner_profile, name='owner-profile'),
+    path('drivers/', owner_drivers, name='owner-drivers'),
+    path('drivers/<int:driver_id>/review/', owner_review_driver, name='owner-review-driver'),
 
     # Admin action
     path('admin-approve/<int:owner_id>/', admin_approve_owner, name='admin-approve-owner'),

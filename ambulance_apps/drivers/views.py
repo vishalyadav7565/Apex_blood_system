@@ -635,8 +635,14 @@ def update_status(request):
     driver.save()
     
     if driver.ambulance:
-        driver.ambulance.status = "online" if is_online else "offline"
-        driver.ambulance.save(update_fields=['status'])
+        ambulance = driver.ambulance
+        if is_online and ambulance.status != 'busy':
+            ambulance.status = 'online'
+            ambulance.is_available = True
+        elif not is_online:
+            ambulance.status = 'offline'
+            ambulance.is_available = False
+        ambulance.save(update_fields=['status', 'is_available', 'updated_at'])
 
     _send_realtime_event(f'driver_{driver.id}', {
         'event': 'DRIVER_STATUS_UPDATED',
