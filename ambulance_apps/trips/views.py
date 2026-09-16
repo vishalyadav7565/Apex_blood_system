@@ -23,7 +23,7 @@ from ambulance_apps.trips.serializers import BookingCreateSerializer, TripSerial
 
 PAST_TRIP_STATUSES = ('completed', 'cancelled', 'rejected')
 MAX_BOOKING_DISTANCE_KM = 20
-NEARBY_OPTIONS_DISTANCE_KM = 5
+NEARBY_OPTIONS_DISTANCE_KM = MAX_BOOKING_DISTANCE_KM
 MAX_NEARBY_OPTIONS = 2
 PICKUP_OTP_VALIDITY_MINUTES = 5
 
