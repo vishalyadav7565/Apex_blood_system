@@ -28,6 +28,15 @@ MAX_NEARBY_OPTIONS = 2
 PICKUP_OTP_VALIDITY_MINUTES = 5
 
 
+def _send_realtime_event(group_name, data):
+    channel_layer = get_channel_layer()
+    if channel_layer:
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {'type': 'send_update', 'data': data},
+        )
+
+
 def _distance_km(latitude_a, longitude_a, latitude_b, longitude_b):
     """Return straight-line distance between two GPS positions in kilometres."""
     latitude_delta = radians(latitude_b - latitude_a)
@@ -281,12 +290,7 @@ def create_booking(request):
         'event': 'NEW_REQUEST',
         'trip': TripSerializer(trip).data,
     }
-    channel_layer = get_channel_layer()
-    if channel_layer:
-        async_to_sync(channel_layer.group_send)(
-            'drivers_online',
-            {'type': 'send_update', 'data': dispatch_event},
-        )
+    _send_realtime_event('drivers_online', dispatch_event)
     if ambulance_type and not driver_id:
         response_data['driver_distance_km'] = round(driver_distance_km, 2)
         response_data['search_radius_km'] = MAX_BOOKING_DISTANCE_KM
@@ -349,6 +353,21 @@ def accept_booking_request(request, trip_id):
             'pickup_otp_hash', 'pickup_otp_expires_at', 'updated_at',
         ])
         _notify_user_about_pickup_otp(trip, otp)
+
+    trip_data = TripSerializer(trip).data
+    event = {
+        'event': 'BOOKING_ACCEPTED',
+        'trip': trip_data,
+        'message': 'Your ambulance driver accepted the request.',
+    }
+    _send_realtime_event(f'driver_{trip.driver_id}', event)
+    try:
+        from apps.users.models import User
+        user = User.objects.filter(phone=trip.patient_phone).only('id').first()
+    except (ImportError, AttributeError):
+        user = None
+    if user:
+        _send_realtime_event(f'user_{user.id}', event)
 
     return Response({
         'message': 'Booking request accepted.',
@@ -437,6 +456,19 @@ def track_booking(request, trip_id):
         patient_phone=patient_phone,
     )
     driver = trip.driver
+    driver_distance_km = None
+    if all(value is not None for value in (
+        driver.current_latitude,
+        driver.current_longitude,
+        trip.pickup_latitude,
+        trip.pickup_longitude,
+    )):
+        driver_distance_km = round(_distance_km(
+            driver.current_latitude,
+            driver.current_longitude,
+            trip.pickup_latitude,
+            trip.pickup_longitude,
+        ), 2)
     return Response({
         'trip_id': trip.id,
         'status': trip.status,
@@ -445,6 +477,7 @@ def track_booking(request, trip_id):
             'longitude': driver.current_longitude,
             'last_updated_at': driver.last_location_update,
         },
+        'driver_distance_km': driver_distance_km,
         'driver': TripSerializer(trip).data['driver_details'],
     })
 

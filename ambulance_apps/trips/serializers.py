@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from ambulance_apps.trips.models import Trip
+from core.utils import calculate_distance
 
 
 class TripSerializer(serializers.ModelSerializer):
@@ -12,6 +13,19 @@ class TripSerializer(serializers.ModelSerializer):
     def get_driver_details(self, trip):
         driver = trip.driver
         ambulance = driver.ambulance
+        driver_distance_km = None
+        if all(value is not None for value in (
+            driver.current_latitude,
+            driver.current_longitude,
+            trip.pickup_latitude,
+            trip.pickup_longitude,
+        )):
+            driver_distance_km = round(calculate_distance(
+                driver.current_latitude,
+                driver.current_longitude,
+                trip.pickup_latitude,
+                trip.pickup_longitude,
+            ), 2)
         return {
             'id': driver.id,
             'name': driver.name,
@@ -19,6 +33,11 @@ class TripSerializer(serializers.ModelSerializer):
             'is_online': driver.is_online,
             'current_latitude': driver.current_latitude,
             'current_longitude': driver.current_longitude,
+            'driver_distance_km': driver_distance_km,
+            'pickup_location': {
+                'latitude': trip.pickup_latitude,
+                'longitude': trip.pickup_longitude,
+            },
             'ambulance': {
                 'id': ambulance.id,
                 'vehicle_number': ambulance.vehicle_number,

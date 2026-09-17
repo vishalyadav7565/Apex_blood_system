@@ -79,7 +79,60 @@ def _send_realtime_event(group_name, data):
         )
 
 
+def _broadcast_driver_location_to_users(driver):
+    from core.utils import calculate_distance
+    active_trips = Trip.objects.filter(driver_id=driver.id).exclude(
+        status__in=['completed', 'cancelled', 'rejected']
+    )
+    try:
+        from apps.users.models import User
+    except (ImportError, AttributeError):
+        return
+
+    for trip in active_trips:
+        user = User.objects.filter(phone=trip.patient_phone).only('id').first()
+        if not user:
+            continue
+        driver_distance_km = None
+        if all(value is not None for value in (
+            driver.current_latitude,
+            driver.current_longitude,
+            trip.pickup_latitude,
+            trip.pickup_longitude,
+        )):
+            driver_distance_km = round(calculate_distance(
+                driver.current_latitude,
+                driver.current_longitude,
+                trip.pickup_latitude,
+                trip.pickup_longitude,
+            ), 2)
+        _send_realtime_event(f'user_{user.id}', {
+            'event': 'AMBULANCE_LOCATION_UPDATED',
+            'trip_id': trip.id,
+            'driver_id': driver.id,
+            'driver_name': driver.name,
+            'latitude': driver.current_latitude,
+            'longitude': driver.current_longitude,
+            'driver_distance_km': driver_distance_km,
+            'updated_at': driver.last_location_update.isoformat() if driver.last_location_update else None,
+        })
+
+
 def _trip_response(trip):
+    pickup_distance_km = None
+    if all(value is not None for value in (
+        trip.driver.current_latitude,
+        trip.driver.current_longitude,
+        trip.pickup_latitude,
+        trip.pickup_longitude,
+    )):
+        from core.utils import calculate_distance
+        pickup_distance_km = round(calculate_distance(
+            trip.driver.current_latitude,
+            trip.driver.current_longitude,
+            trip.pickup_latitude,
+            trip.pickup_longitude,
+        ), 2)
     return {
         'id': trip.id,
         'trip_id': trip.id,
@@ -96,7 +149,12 @@ def _trip_response(trip):
         'drop_address': trip.destination_address,
         'drop_lat': trip.destination_latitude,
         'drop_lng': trip.destination_longitude,
-        'distance': getattr(trip, 'distance', None),
+        'distance': pickup_distance_km,
+        'pickup_distance_km': pickup_distance_km,
+        'pickup_location': {
+            'latitude': trip.pickup_latitude,
+            'longitude': trip.pickup_longitude,
+        },
         'eta': getattr(trip, 'eta', None),
         'payment': getattr(trip, 'payment', None),
     }
@@ -654,6 +712,7 @@ def update_status(request):
         'latitude': driver.current_latitude,
         'longitude': driver.current_longitude,
     })
+    _broadcast_driver_location_to_users(driver)
         
     return Response({
         'message': 'Status updated successfully.',
@@ -693,12 +752,15 @@ def update_location(request):
     location_data = {
         'event': 'AMBULANCE_LOCATION_UPDATED',
         'driver_id': driver.id,
+        'driver_name': driver.name,
         'latitude': driver.current_latitude,
         'longitude': driver.current_longitude,
         'updated_at': driver.last_location_update.isoformat(),
     }
     if driver.ambulance and driver.ambulance.hospital_id:
         _send_realtime_event(f'hospital_{driver.ambulance.hospital_id}', location_data)
+
+    _broadcast_driver_location_to_users(driver)
     
     return Response({
         'message': 'Location updated successfully.'
