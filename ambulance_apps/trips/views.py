@@ -19,6 +19,7 @@ from ambulance_apps.ambulance.models import Ambulance
 from ambulance_apps.drivers.models import Driver
 from ambulance_apps.trips.models import Trip
 from ambulance_apps.trips.serializers import BookingCreateSerializer, TripSerializer
+from apps.notifications.utils import send_push_notification
 
 
 PAST_TRIP_STATUSES = ('completed', 'cancelled', 'rejected')
@@ -109,7 +110,9 @@ def _notify_user_about_pickup_otp(trip, otp):
     try:
         from apps.users.models import User
         user = User.objects.using('default').filter(phone=trip.patient_phone).first()
-        if user and user.email:
+        if not user:
+            return
+        if user.email:
             send_mail(
                 subject='Your ambulance pickup OTP',
                 message=(
@@ -119,6 +122,18 @@ def _notify_user_about_pickup_otp(trip, otp):
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
                 fail_silently=True,
+            )
+        if user.fcm_token:
+            send_push_notification(
+                token=user.fcm_token,
+                title='Ambulance driver accepted',
+                body=f'{trip.driver.name} accepted your request. Pickup OTP: {otp}',
+                data={
+                    'event': 'BOOKING_ACCEPTED',
+                    'trip_id': trip.id,
+                    'otp_required': 'true',
+                    'driver_id': trip.driver_id,
+                },
             )
     except Exception:
         # OTP remains valid even if a notification provider is temporarily unavailable.

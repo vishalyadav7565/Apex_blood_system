@@ -21,15 +21,16 @@ from ambulance_apps.drivers.verification import verify_driver_documents
 from ambulance_apps.drivers.validators import lookup_pincode
 from ambulance_apps.trips.models import Trip
 from ambulance_apps.trips.serializers import TripSerializer
+from apps.notifications.utils import send_push_notification
 from apps.users.firebase_utils import verify_firebase_token
 
 
 DRIVER_TRIP_STATUSES = {'started', 'reached_pickup', 'picked_up', 'completed', 'rejected'}
 TRIP_STATUS_TRANSITIONS = {
-    'requested': {'started', 'rejected'},
+    'requested': {'rejected'},
     'accepted': {'started', 'rejected'},
     'started': {'reached_pickup', 'rejected'},
-    'reached_pickup': {'picked_up', 'rejected'},
+    'reached_pickup': {'rejected'},
     'picked_up': {'completed', 'rejected'},
 }
 
@@ -818,6 +819,24 @@ def update_trip_status(request, trip_id):
 
     trip.status = trip_status
     trip.save()
+
+    if trip_status == 'reached_pickup':
+        try:
+            from apps.users.models import User
+            user = User.objects.filter(phone=trip.patient_phone).only('fcm_token').first()
+            if user and user.fcm_token:
+                send_push_notification(
+                    token=user.fcm_token,
+                    title='Ambulance has reached pickup',
+                    body=f'{trip.driver.name} has reached you. Share the pickup OTP with the driver.',
+                    data={
+                        'event': 'DRIVER_REACHED_PICKUP',
+                        'trip_id': trip.id,
+                        'otp_required': 'true',
+                    },
+                )
+        except Exception:
+            pass
     
     # Update ambulance status/availability based on trip status
     driver = trip.driver
