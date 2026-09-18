@@ -1,5 +1,6 @@
 from datetime import timedelta
 from math import asin, cos, radians, sin, sqrt
+import re
 import secrets
 
 from django.conf import settings
@@ -427,10 +428,16 @@ def reject_booking_request(request, trip_id):
 def verify_pickup_otp(request, trip_id):
     """Driver verifies the OTP given by the user at pickup and starts the trip."""
     driver_id = request.data.get('driver_id')
-    otp = str(request.data.get('otp') or '').strip()
+    otp = str(request.data.get('otp') or request.data.get('pickup_otp') or '')
+    otp = re.sub(r'\s+', '', otp)
     if not driver_id or not otp:
         return Response(
             {'detail': 'driver_id and otp are required.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not re.fullmatch(r'\d{6}', otp):
+        return Response(
+            {'detail': 'OTP must contain exactly 6 digits.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
