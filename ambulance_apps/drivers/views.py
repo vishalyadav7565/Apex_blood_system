@@ -28,7 +28,7 @@ from apps.users.firebase_utils import verify_firebase_token
 DRIVER_TRIP_STATUSES = {'started', 'reached_pickup', 'picked_up', 'completed', 'rejected'}
 TRIP_STATUS_TRANSITIONS = {
     'requested': {'rejected'},
-    'accepted': {'started', 'rejected'},
+    'accepted': {'started', 'reached_pickup', 'rejected'},
     'started': {'reached_pickup', 'rejected'},
     'reached_pickup': {'rejected'},
     'picked_up': {'completed', 'rejected'},
