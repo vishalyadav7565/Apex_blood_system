@@ -74,10 +74,13 @@ def _send_realtime_event(group_name, data):
     """Send a JSON event without making REST requests depend on a live socket."""
     channel_layer = get_channel_layer()
     if channel_layer:
-        async_to_sync(channel_layer.group_send)(
-            group_name,
-            {'type': 'send_update', 'data': data},
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {'type': 'send_update', 'data': data},
+            )
+        except Exception as error:
+            print(f'Realtime event failed for {group_name}: {error}')
 
 
 def _broadcast_driver_location_to_users(driver):

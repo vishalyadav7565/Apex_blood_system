@@ -32,10 +32,14 @@ PICKUP_OTP_VALIDITY_MINUTES = 5
 def _send_realtime_event(group_name, data):
     channel_layer = get_channel_layer()
     if channel_layer:
-        async_to_sync(channel_layer.group_send)(
-            group_name,
-            {'type': 'send_update', 'data': data},
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {'type': 'send_update', 'data': data},
+            )
+        except Exception as error:
+            # Redis/WebSocket outages must not fail booking acceptance.
+            print(f'Realtime event failed for {group_name}: {error}')
 
 
 def _distance_km(latitude_a, longitude_a, latitude_b, longitude_b):
