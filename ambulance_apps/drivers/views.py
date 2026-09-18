@@ -814,6 +814,12 @@ def update_trip_status(request, trip_id):
         )
 
     trip = get_object_or_404(Trip.objects.select_related('driver__ambulance'), id=trip_id)
+    if trip_status == trip.status:
+        return Response({
+            'message': 'Trip status is already set.',
+            'status': trip.status,
+            'trip': _trip_response(trip),
+        }, status=status.HTTP_200_OK)
     if trip_status not in TRIP_STATUS_TRANSITIONS.get(trip.status, set()):
         return Response(
             {'detail': f'Cannot transition trip from {trip.status} to {trip_status}.'},

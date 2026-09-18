@@ -436,7 +436,7 @@ def verify_pickup_otp(request, trip_id):
 
     with transaction.atomic(using='ambulance_db'):
         trip = get_object_or_404(
-            Trip.objects.select_for_update().select_related('driver__ambulance'),
+            Trip.objects.select_for_update(),
             pk=trip_id,
         )
         if str(trip.driver_id) != str(driver_id):
@@ -471,11 +471,16 @@ def track_booking(request, trip_id):
     patient_phone = request.query_params.get('patient_phone')
     if not patient_phone:
         return Response({'detail': 'patient_phone is required.'}, status=status.HTTP_400_BAD_REQUEST)
-    trip = get_object_or_404(
-        Trip.objects.select_related('driver__ambulance'),
-        pk=trip_id,
+    trips = Trip.objects.select_related('driver__ambulance').filter(
         patient_phone=patient_phone,
     )
+    if trip_id:
+        trip = get_object_or_404(trips, pk=trip_id)
+    else:
+        # Older clients may send 0 before storing the booking response.
+        trip = get_object_or_404(
+            trips.exclude(status__in=PAST_TRIP_STATUSES).order_by('-created_at'),
+        )
     driver = trip.driver
     driver_distance_km = None
     if all(value is not None for value in (
