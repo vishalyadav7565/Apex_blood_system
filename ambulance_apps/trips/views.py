@@ -337,8 +337,10 @@ def _get_driver_trip_for_action(request, trip_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Lock only the trip row. Joining the nullable driver.ambulance relation
+    # while using FOR UPDATE causes PostgreSQL to reject the query.
     trip = get_object_or_404(
-        Trip.objects.select_for_update().select_related('driver__ambulance'),
+        Trip.objects.select_for_update(),
         pk=trip_id,
     )
     if str(trip.driver_id) != str(driver_id):
