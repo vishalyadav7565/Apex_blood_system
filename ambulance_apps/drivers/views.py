@@ -27,10 +27,10 @@ from apps.users.firebase_utils import verify_firebase_token
 
 DRIVER_TRIP_STATUSES = {'started', 'reached_pickup', 'picked_up', 'completed', 'rejected'}
 TRIP_STATUS_TRANSITIONS = {
-    'requested': {'rejected'},
-    'accepted': {'started', 'reached_pickup', 'rejected'},
-    'started': {'reached_pickup', 'rejected'},
-    'reached_pickup': {'rejected'},
+    'requested': {'accepted', 'rejected'},
+    'accepted': {'started', 'reached_pickup', 'picked_up', 'rejected'},
+    'started': {'reached_pickup', 'picked_up', 'rejected'},
+    'reached_pickup': {'picked_up', 'rejected'},
     'picked_up': {'completed', 'rejected'},
 }
 
@@ -827,6 +827,8 @@ def update_trip_status(request, trip_id):
         )
 
     trip.status = trip_status
+    if trip_status == 'picked_up':
+        trip.otp_verified_at = timezone.now()
     trip.save()
 
     if trip_status == 'reached_pickup':

@@ -5,10 +5,20 @@ from core.utils import calculate_distance
 
 class TripSerializer(serializers.ModelSerializer):
     driver_details = serializers.SerializerMethodField()
+    pickup_otp = serializers.SerializerMethodField()
 
     class Meta:
         model = Trip
         fields = '__all__'
+
+    def get_pickup_otp(self, trip):
+        if not trip.pickup_otp_hash:
+            return None
+        if ':' in trip.pickup_otp_hash and not trip.pickup_otp_hash.startswith('pbkdf2_'):
+            return trip.pickup_otp_hash.split(':')[0]
+        if len(trip.pickup_otp_hash) == 6 and trip.pickup_otp_hash.isdigit():
+            return trip.pickup_otp_hash
+        return None
 
     def get_driver_details(self, trip):
         driver = trip.driver
