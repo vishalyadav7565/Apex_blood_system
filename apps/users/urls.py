@@ -9,6 +9,7 @@ from .views import (
     profile,
     toggle_donor,
     all_users,
+    set_user_active,
     create_support_ticket,
     firebase_login,
 )
@@ -23,6 +24,7 @@ urlpatterns = [
     path('location/', update_location),
     path('live/', live_locations),
     path('all-users/', all_users),
+    path('admin/<int:user_id>/active/', set_user_active),
     path('save-fcm-token/', save_fcm_token),
     path('support/create/', create_support_ticket),
 ]

@@ -576,8 +576,10 @@ def live_locations(request):
 # ALL USERS FOR ADMIN PANEL
 # =========================================
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def all_users(request):
+    if not request.user.is_staff:
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
 
     users = User.objects.all().order_by('-id')
 
@@ -623,6 +625,9 @@ def all_users(request):
             "is_available":
                 user.is_available,
 
+            "is_active":
+                user.is_active,
+
             "latitude":
                 user.latitude,
 
@@ -631,6 +636,28 @@ def all_users(request):
         })
 
     return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def set_user_active(request, user_id):
+    if not request.user.is_staff:
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
+
+    user = get_object_or_404(User, id=user_id)
+    is_active = request.data.get('is_active')
+    if not isinstance(is_active, bool):
+        return Response({'error': 'is_active must be boolean.'}, status=status.HTTP_400_BAD_REQUEST)
+    if user.id == request.user.id and not is_active:
+        return Response({'error': 'You cannot block your own admin account.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user.is_active = is_active
+    user.save(update_fields=['is_active', 'updated_at'])
+    return Response({
+        'id': user.id,
+        'is_active': user.is_active,
+        'message': 'User blocked.' if not is_active else 'User unblocked.',
+    })
 
 
 @api_view(["POST"])
