@@ -14,7 +14,7 @@ from asgiref.sync import async_to_sync
 from geopy.distance import geodesic
 
 from .models import BloodRequest
-from apps.users.models import User
+from apps.users.models import User, UserActivityLog
 from apps.hospitals.models import Hospital
 from apps.notifications.utils import send_push_notification
 from .utils import notify_compatible_donors
@@ -167,6 +167,12 @@ def create_request(request):
     )
 
     req.save()
+    UserActivityLog.objects.create(
+        user=request.user,
+        activity_type='blood_request',
+        title=f'Blood request created ({req.request_code or req.id})',
+        reference_id=req.id,
+    )
 
     channel_layer = get_channel_layer()
 

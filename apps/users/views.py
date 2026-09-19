@@ -28,7 +28,7 @@ from django.conf import settings
 
 from firebase_admin import auth as firebase_auth
 from . import firebase_utils
-from .models import OTP, HelpSupport
+from .models import OTP, HelpSupport, UserActivityLog
 
 try:
     from drf_spectacular.utils import extend_schema
@@ -39,6 +39,21 @@ except ImportError:
         return decorator
 
 User = get_user_model()
+
+
+def _record_user_activity(user, activity_type, title, description=None, reference_id=None):
+    now = timezone.now()
+    user.last_active = now
+    if activity_type == 'login':
+        user.last_login = now
+    user.save(update_fields=['last_active', 'last_login', 'updated_at'] if activity_type == 'login' else ['last_active', 'updated_at'])
+    UserActivityLog.objects.create(
+        user=user,
+        activity_type=activity_type,
+        title=title,
+        description=description,
+        reference_id=str(reference_id) if reference_id is not None else None,
+    )
 
 
 def normalize_phone(phone):
@@ -249,6 +264,7 @@ def verify_otp(request):
         # =================================
         # JWT TOKEN
         # =================================
+        _record_user_activity(user, 'login', 'User login completed')
         refresh = RefreshToken.for_user(user)
 
         # =================================
@@ -350,6 +366,10 @@ def complete_profile(request):
     user.address = request.data.get('address', user.address)
     user.blood_group = request.data.get('blood_group', user.blood_group)
     user.pincode = request.data.get('pincode', user.pincode)
+    user.state = request.data.get('state', user.state)
+    user.district = request.data.get('district', user.district)
+    user.city = request.data.get('city', user.city)
+    user.gender = request.data.get('gender', user.gender)
 
     if 'is_donor' in request.data:
         user.is_donor = request.data.get('is_donor')
@@ -511,8 +531,8 @@ def update_location(request):
 
     user.latitude = latitude
     user.longitude = longitude
-
-    user.save()
+    user.save(update_fields=['latitude', 'longitude', 'updated_at'])
+    _record_user_activity(user, 'location_update', 'Location updated')
 
     return Response({
 

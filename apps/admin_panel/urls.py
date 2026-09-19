@@ -9,6 +9,13 @@ from .views import (
     map_data,
     admin_login,
     all_users,
+    advanced_users,
+    user_profile,
+    blood_request_detail,
+    ambulance_request_detail,
+    toggle_user_active,
+    add_admin_user,
+    live_users_map,
     analytics_dashboard,
     hospital_performance,
     blood_group_trends,
@@ -47,8 +54,14 @@ urlpatterns = [
 
     path(
         'users/',
-        all_users
+        advanced_users
     ),
+    path('users/<int:user_id>/profile/', user_profile),
+    path('users/<int:user_id>/toggle-active/', toggle_user_active),
+    path('users/add-user/', add_admin_user),
+    path('users/live-map/', live_users_map),
+    path('requests/blood/<int:request_id>/', blood_request_detail),
+    path('requests/ambulance/<int:request_id>/', ambulance_request_detail),
 
     path(
         'hospitals/',

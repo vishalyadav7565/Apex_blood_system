@@ -28,17 +28,214 @@ from django.contrib.auth import authenticate
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.users.models import User, HelpSupport
+from apps.users.models import User, HelpSupport, UserActivityLog
 from apps.blood_requests.models import BloodRequest
 from apps.hospitals.models import Hospital
 from apps.notifications.utils import send_push_notification
 from django.shortcuts import get_object_or_404
+from django.db import IntegrityError
 from ambulance_apps.owners.models import Owner
 from ambulance_apps.drivers.models import Driver
 from ambulance_apps.ambulance.models import Ambulance
+from ambulance_apps.trips.models import AmbulanceRequest
+from ambulance_apps.trips.models import Trip
 
 
 from django.views.decorators.csrf import csrf_exempt
+
+
+def _admin_only(request):
+    return request.user.is_authenticated and request.user.is_staff
+
+
+def _request_status(request):
+    return request.get('detailed_status') or request.get('status') or ''
+
+
+def _serialize_admin_user(user, blood_requests, ambulance_requests):
+    return {
+        'id': user.id,
+        'user_id_code': user.user_id_code or f'ALS-{10000 + user.id}',
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'username': user.username,
+        'phone': user.phone,
+        'email': user.email,
+        'blood_group': user.blood_group,
+        'age': user.age,
+        'gender': user.gender,
+        'state': user.state,
+        'district': user.district,
+        'city': user.city,
+        'address': user.address,
+        'pincode': user.pincode,
+        'is_donor': user.is_donor,
+        'is_available': user.is_available,
+        'is_active': user.is_active,
+        'latitude': user.latitude,
+        'longitude': user.longitude,
+        'created_at': user.created_at,
+        'updated_at': user.updated_at,
+        'last_active': user.last_active,
+        'last_login': user.last_login,
+        'total_active_days': user.total_active_days,
+        'blood_requests': blood_requests,
+        'ambulance_requests': ambulance_requests,
+        'activity_logs': [
+            {
+                'id': log.id,
+                'activity_type': log.activity_type,
+                'title': log.title,
+                'description': log.description,
+                'reference_id': log.reference_id,
+                'created_at': log.created_at,
+            }
+            for log in UserActivityLog.objects.filter(user_id=user.id)[:100]
+        ],
+    }
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def advanced_users(request):
+    if not _admin_only(request):
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
+
+    now = timezone.now()
+    search = request.query_params.get('search', '').strip()
+    state = request.query_params.get('state', '').strip()
+    district = request.query_params.get('district', '').strip()
+    blood_group = request.query_params.get('blood_group', '').strip()
+    activity_status = request.query_params.get('activity_status', '').strip()
+
+    users = User.objects.all()
+    if search:
+        users = users.filter(
+            Q(first_name__icontains=search)
+            | Q(last_name__icontains=search)
+            | Q(phone__icontains=search)
+            | Q(email__icontains=search)
+            | Q(user_id_code__icontains=search)
+        )
+    if state:
+        users = users.filter(state__iexact=state)
+    if district:
+        users = users.filter(district__iexact=district)
+    if blood_group:
+        users = users.filter(blood_group__iexact=blood_group)
+
+    blood_rows = list(BloodRequest.objects.select_related('accepted_hospital').order_by('-created_at'))
+    ambulance_rows = list(AmbulanceRequest.objects.using('ambulance_db').select_related('driver').order_by('-created_at'))
+    trip_rows = list(Trip.objects.using('ambulance_db').select_related('driver__ambulance').order_by('-created_at'))
+
+    blood_by_user = {}
+    blood_user_ids = set()
+    for item in blood_rows:
+        blood_user_ids.add(item.user_id)
+        blood_by_user.setdefault(item.user_id, []).append({
+            'id': item.id,
+            'request_code': item.request_code or f'#BR-{10000 + item.id}',
+            'patient_name': item.patient_name or item.user_name,
+            'patient_phone': item.patient_phone or item.user_phone,
+            'blood_group': item.blood_group,
+            'units': item.units or item.blood_units,
+            'reason': item.reason,
+            'status': item.status,
+            'user_address': item.user_address,
+            'latitude': item.latitude,
+            'longitude': item.longitude,
+            'prescription_image': item.prescription_image.url if item.prescription_image else (item.prescription.url if item.prescription else None),
+            'accepted_hospital': item.accepted_hospital.name if item.accepted_hospital else None,
+            'created_at': item.created_at,
+        })
+
+    ambulance_by_user = {}
+    ambulance_user_ids = set()
+    for item in ambulance_rows:
+        ambulance_user_ids.add(item.user_id)
+        ambulance_by_user.setdefault(item.user_id, []).append({
+            'id': item.id,
+            'request_code': item.request_code or f'#AR-{20000 + item.id}',
+            'patient_name': item.patient_name,
+            'patient_phone': item.patient_phone,
+            'emergency_type': item.emergency_type,
+            'pickup_address': item.pickup_address,
+            'pickup_latitude': item.pickup_latitude,
+            'pickup_longitude': item.pickup_longitude,
+            'destination_address': item.destination_address,
+            'hospital_name': item.hospital_name,
+            'driver_name': item.driver.name if item.driver else None,
+            'driver_phone': item.driver.phone if item.driver else None,
+            'vehicle_number': item.vehicle_number or (item.driver.ambulance.vehicle_number if item.driver and item.driver.ambulance else None),
+            'status': item.status,
+            'created_at': item.created_at,
+        })
+
+    # Existing ambulance bookings are stored as Trip records and are included
+    # until all clients write the dedicated AmbulanceRequest model.
+    phone_to_user_id = dict(User.objects.filter(phone__isnull=False).values_list('phone', 'id'))
+    for item in trip_rows:
+        user_id = phone_to_user_id.get(item.patient_phone)
+        if not user_id:
+            continue
+        ambulance_user_ids.add(user_id)
+        ambulance_by_user.setdefault(user_id, []).append({
+            'id': item.id,
+            'request_code': f'#AR-{20000 + item.id}',
+            'patient_name': item.patient_name,
+            'patient_phone': item.patient_phone,
+            'emergency_type': 'Medical Emergency',
+            'pickup_address': item.pickup_address,
+            'pickup_latitude': item.pickup_latitude,
+            'pickup_longitude': item.pickup_longitude,
+            'destination_address': item.destination_address,
+            'hospital_name': item.driver.ambulance.hospital.name if item.driver and item.driver.ambulance and item.driver.ambulance.hospital else None,
+            'driver_name': item.driver.name if item.driver else None,
+            'driver_phone': item.driver.phone if item.driver else None,
+            'vehicle_number': item.driver.ambulance.vehicle_number if item.driver and item.driver.ambulance else None,
+            'status': item.status,
+            'created_at': item.created_at,
+        })
+
+    if activity_status == 'active_now':
+        users = users.filter(is_available=True)
+    elif activity_status == 'active_today':
+        users = users.filter(Q(last_active__date=now.date()) | Q(last_login__date=now.date()))
+    elif activity_status == 'inactive_7d':
+        users = users.filter(Q(last_active__lt=now - timedelta(days=7)) | Q(last_active__isnull=True))
+    elif activity_status == 'inactive_30d':
+        users = users.filter(Q(last_active__lt=now - timedelta(days=30)) | Q(last_active__isnull=True))
+    elif activity_status == 'blood_users':
+        users = users.filter(id__in=blood_user_ids)
+    elif activity_status == 'ambulance_users':
+        users = users.filter(id__in=ambulance_user_ids)
+    elif activity_status == 'no_requests':
+        users = users.exclude(id__in=blood_user_ids | ambulance_user_ids)
+
+    users = list(users.order_by('-id'))
+    results = [
+        _serialize_admin_user(
+            user,
+            blood_by_user.get(user.id, []),
+            ambulance_by_user.get(user.id, []),
+        )
+        for user in users
+    ]
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    monthly_blood = sum(1 for item in blood_rows if item.created_at >= month_start)
+    monthly_ambulance = sum(1 for item in ambulance_rows if item.created_at >= month_start)
+    monthly_ambulance += sum(1 for item in trip_rows if item.created_at >= month_start)
+    return Response({
+        'count': len(results),
+        'overview_stats': {
+            'total_users': User.objects.count(),
+            'active_today': User.objects.filter(Q(last_active__date=now.date()) | Q(last_login__date=now.date())).count(),
+            'inactive_7d': User.objects.filter(Q(last_active__lt=now - timedelta(days=7)) | Q(last_active__isnull=True)).count(),
+            'requests_this_month': monthly_blood + monthly_ambulance,
+            'active_now': User.objects.filter(is_available=True).count(),
+        },
+        'results': results,
+    })
 
 
 # =========================================
@@ -1213,3 +1410,262 @@ def reject_ambulance_admin(request, id):
         "is_approved": ambulance.is_approved,
         "rejection_reason": ambulance.rejection_reason
     })
+
+
+def _relative_time(value):
+    if not value:
+        return None
+    seconds = max(0, int((timezone.now() - value).total_seconds()))
+    if seconds < 60:
+        return f'{seconds} sec ago'
+    minutes = seconds // 60
+    if minutes < 60:
+        return f'{minutes} min ago'
+    hours = minutes // 60
+    if hours < 24:
+        return f'{hours} hr ago'
+    return f'{hours // 24} days ago'
+
+
+def _status_steps(status_value):
+    status_value = status_value or 'searching'
+    found_done = status_value in {'blood_bank_found', 'accepted', 'completed'}
+    result_done = status_value in {'accepted', 'completed'}
+    result_rejected = status_value in {'rejected', 'cancelled'}
+    return [
+        {'step': 'searching', 'label': 'Searching', 'status': 'completed'},
+        {'step': 'found', 'label': 'Blood Bank Found', 'status': 'completed' if found_done else 'pending'},
+        {'step': 'result', 'label': 'Accepted / Rejected', 'status': 'rejected' if result_rejected else 'completed' if result_done else 'pending'},
+    ]
+
+
+def _blood_request_detail(item, request):
+    image = item.prescription_image or item.prescription
+    return {
+        'id': item.id,
+        'request_code': item.request_code or f'#BR-{10000 + item.id}',
+        'patient_name': item.patient_name or item.user_name or item.user.get_full_name(),
+        'patient_phone': item.patient_phone or item.user_phone or item.user.phone,
+        'required_blood_group': item.blood_group,
+        'units': item.units or item.blood_units,
+        'reason': item.reason,
+        'created_at': item.created_at,
+        'location': item.user_address,
+        'prescription_image': request.build_absolute_uri(image.url) if image else None,
+        'status': item.status,
+        'status_steps': _status_steps(item.status),
+    }
+
+
+def _ambulance_request_detail(item):
+    driver = item.driver
+    ambulance = driver.ambulance if driver else None
+    return {
+        'id': item.id,
+        'request_code': item.request_code or f'#AR-{20000 + item.id}',
+        'patient_name': item.patient_name,
+        'patient_phone': item.patient_phone,
+        'emergency_type': item.emergency_type,
+        'created_at': item.created_at,
+        'status': item.status.replace('_', ' ').title(),
+        'pickup': {
+            'address': item.pickup_address,
+            'is_live': item.pickup_latitude is not None and item.pickup_longitude is not None,
+            'latitude': item.pickup_latitude,
+            'longitude': item.pickup_longitude,
+        },
+        'destination': {
+            'hospital_name': item.hospital_name,
+            'address': item.destination_address,
+        },
+        'driver': {
+            'name': driver.name if driver else None,
+            'phone': driver.phone if driver else None,
+            'vehicle_number': item.vehicle_number or ambulance.vehicle_number if ambulance else item.vehicle_number,
+        },
+    }
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_profile(request, user_id):
+    if not _admin_only(request):
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
+    user = get_object_or_404(User, id=user_id)
+    blood_requests = BloodRequest.objects.filter(user_id=user.id).select_related('accepted_hospital').order_by('-created_at')
+    ambulance_requests = AmbulanceRequest.objects.using('ambulance_db').filter(user_id=user.id).select_related('driver').order_by('-created_at')
+    activity = list(UserActivityLog.objects.filter(user_id=user.id).order_by('-created_at')[:100])
+    events = []
+    for log in activity:
+        events.append({
+            'created_at': log.created_at,
+            'time': timezone.localtime(log.created_at).strftime('%I:%M %p'),
+            'icon': {'active': '🟢', 'login': '🔐', 'blood_request': '🩸', 'ambulance_request': '🚑', 'location_update': '📍'}.get(log.activity_type, '•'),
+            'type': log.activity_type,
+            'label': log.title,
+            'request_id': int(log.reference_id) if log.reference_id and log.reference_id.isdigit() else None,
+        })
+    grouped = {}
+    for event in events:
+        event_date = event.pop('created_at').date()
+        date_group = 'TODAY' if event_date == timezone.localdate() else 'YESTERDAY' if event_date == timezone.localdate() - timedelta(days=1) else event_date.strftime('%d %b').upper()
+        grouped.setdefault(date_group, []).append(event)
+
+    serialized_blood = [_blood_request_detail(item, request) for item in blood_requests]
+    serialized_ambulance = [_ambulance_request_detail(item) for item in ambulance_requests]
+
+    return Response({
+        'user': {
+            'id': user.id,
+            'user_id_code': user.user_id_code or f'ALS-{10000 + user.id}',
+            'full_name': user.get_full_name(),
+            'phone': user.phone,
+            'email': user.email,
+            'age': user.age,
+            'gender': user.gender,
+            'blood_group': user.blood_group,
+            'state': user.state,
+            'district': user.district,
+            'city': user.city,
+            'address': user.address,
+            'is_active': user.is_active,
+            'is_available': user.is_available,
+            'created_at': user.created_at,
+            'last_active': user.last_active,
+            'last_login': user.last_login,
+            'total_active_days': user.total_active_days,
+            'last_seen': _relative_time(user.last_active),
+            'live_location': {
+                'latitude': user.latitude,
+                'longitude': user.longitude,
+                'last_updated': _relative_time(user.last_active),
+            },
+            'blood_requests': serialized_blood,
+            'ambulance_requests': serialized_ambulance,
+        },
+        'stats': {
+            'blood_requests_count': len(serialized_blood),
+            'ambulance_requests_count': len(serialized_ambulance),
+        },
+        'blood_requests': serialized_blood,
+        'ambulance_requests': serialized_ambulance,
+        'activity_timeline': [
+            {'date_group': date_group, 'events': group_events}
+            for date_group, group_events in grouped.items()
+        ],
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def blood_request_detail(request, request_id):
+    if not _admin_only(request):
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
+    item = get_object_or_404(BloodRequest.objects.select_related('user'), id=request_id)
+    return Response(_blood_request_detail(item, request))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def ambulance_request_detail(request, request_id):
+    if not _admin_only(request):
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
+    item = AmbulanceRequest.objects.using('ambulance_db').select_related('driver').filter(id=request_id).first()
+    if item:
+        return Response(_ambulance_request_detail(item))
+
+    trip = get_object_or_404(
+        Trip.objects.using('ambulance_db').select_related('driver__ambulance'),
+        id=request_id,
+    )
+    driver = trip.driver
+    ambulance = driver.ambulance if driver else None
+    return Response({
+        'id': trip.id,
+        'request_code': f'#AR-{20000 + trip.id}',
+        'patient_name': trip.patient_name,
+        'patient_phone': trip.patient_phone,
+        'emergency_type': 'Medical Emergency',
+        'created_at': trip.created_at,
+        'status': trip.status.replace('_', ' ').title(),
+        'pickup': {
+            'address': trip.pickup_address,
+            'is_live': trip.pickup_latitude is not None and trip.pickup_longitude is not None,
+            'latitude': trip.pickup_latitude,
+            'longitude': trip.pickup_longitude,
+        },
+        'destination': {
+            'hospital_name': ambulance.hospital.name if ambulance and ambulance.hospital else None,
+            'address': trip.destination_address,
+        },
+        'driver': {
+            'name': driver.name if driver else None,
+            'phone': driver.phone if driver else None,
+            'vehicle_number': ambulance.vehicle_number if ambulance else None,
+        },
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_user_active(request, user_id):
+    if not _admin_only(request):
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
+    user = get_object_or_404(User, id=user_id)
+    is_active = request.data.get('is_active')
+    if not isinstance(is_active, bool):
+        return Response({'error': 'is_active must be boolean.'}, status=status.HTTP_400_BAD_REQUEST)
+    if user.id == request.user.id and not is_active:
+        return Response({'error': 'You cannot block your own admin account.'}, status=status.HTTP_400_BAD_REQUEST)
+    user.is_active = is_active
+    user.save(update_fields=['is_active', 'updated_at'])
+    return Response({'id': user.id, 'is_active': user.is_active, 'message': 'User blocked.' if not is_active else 'User unblocked.'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_admin_user(request):
+    if not _admin_only(request):
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
+    phone = str(request.data.get('phone') or '').strip()
+    if not phone:
+        return Response({'error': 'phone is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        user = User(
+            username=phone,
+            phone=phone,
+            email=request.data.get('email') or '',
+            first_name=request.data.get('first_name') or '',
+            last_name=request.data.get('last_name') or '',
+            blood_group=request.data.get('blood_group') or None,
+            age=request.data.get('age') or None,
+            gender=request.data.get('gender') or None,
+            state=request.data.get('state') or None,
+            district=request.data.get('district') or None,
+            city=request.data.get('city') or None,
+            address=request.data.get('address') or None,
+            is_donor=bool(request.data.get('is_donor', False)),
+        )
+        user.set_unusable_password()
+        user.save()
+    except (IntegrityError, ValueError) as error:
+        return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'user': _serialize_admin_user(user, [], []), 'message': 'User created successfully.'}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def live_users_map(request):
+    if not _admin_only(request):
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
+    users = User.objects.filter(Q(is_available=True) | (Q(latitude__isnull=False) & Q(longitude__isnull=False)))
+    state = request.query_params.get('state')
+    district = request.query_params.get('district')
+    search = request.query_params.get('search')
+    if state:
+        users = users.filter(state__iexact=state)
+    if district:
+        users = users.filter(district__iexact=district)
+    if search:
+        users = users.filter(Q(first_name__icontains=search) | Q(last_name__icontains=search) | Q(phone__icontains=search) | Q(user_id_code__icontains=search))
+    return Response(list(users.values('id', 'user_id_code', 'first_name', 'last_name', 'phone', 'state', 'district', 'city', 'latitude', 'longitude', 'is_available', 'is_active')))
