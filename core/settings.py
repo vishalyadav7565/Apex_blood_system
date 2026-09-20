@@ -453,9 +453,11 @@ else:
             "https://api.apexlifesaver.com",
         ]
 
-# Allow Netlify previews & subdomains
+# Allow Netlify previews, Firebase hosting, & subdomains
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.netlify\.app$",
+    r"^https://.*\.web\.app$",
+    r"^https://.*\.firebaseapp\.com$",
     r"^https://.*\.apexlifesaver\.com$",
 ]
 
