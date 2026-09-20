@@ -1561,6 +1561,7 @@ def user_profile(request, user_id):
     if not _admin_only(request):
         return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
     user = get_object_or_404(User, id=user_id)
+    blood_requests = BloodRequest.objects.filter(user_id=user.id).select_related('accepted_hospital').order_by('-created_at')
     clean_phone = normalize_phone(user.phone)
     raw_phone = user.phone or ''
     phone_filter = (
