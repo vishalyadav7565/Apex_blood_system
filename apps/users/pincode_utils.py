@@ -21,29 +21,34 @@ def lookup_pincode(pincode):
     if p in _PINCODE_CACHE:
         return _PINCODE_CACHE[p]
 
-    try:
-        resp = requests.get(f"https://api.postalpincode.in/pincode/{p}", timeout=4)
-        if resp.status_code == 200:
-            data = resp.json()
-            if isinstance(data, list) and len(data) > 0:
-                first = data[0]
-                if first.get("Status") == "Success" and first.get("PostOffice"):
-                    po = first["PostOffice"][0]
-                    district = (po.get("District") or "").strip()
-                    state = (po.get("State") or "").strip()
-                    block = (po.get("Block") or "").strip()
-                    city = block if block and block.upper() != "NA" else ((po.get("Name") or district).strip())
-                    
-                    result = {
-                        "pincode": p,
-                        "state": state,
-                        "district": district,
-                        "city": city,
-                        "post_offices": [o.get("Name") for o in first["PostOffice"] if o.get("Name")][:5],
-                    }
-                    _PINCODE_CACHE[p] = result
-                    return result
-    except Exception as e:
-        logger.warning(f"Failed to lookup pincode {p}: {e}")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+    }
+    for attempt in range(2):
+        try:
+            resp = requests.get(f"https://api.postalpincode.in/pincode/{p}", headers=headers, timeout=6)
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, list) and len(data) > 0:
+                    first = data[0]
+                    if first.get("Status") == "Success" and first.get("PostOffice"):
+                        po = first["PostOffice"][0]
+                        district = (po.get("District") or "").strip()
+                        state = (po.get("State") or "").strip()
+                        block = (po.get("Block") or "").strip()
+                        city = block if block and block.upper() != "NA" else ((po.get("Name") or district).strip())
+                        
+                        result = {
+                            "pincode": p,
+                            "state": state,
+                            "district": district,
+                            "city": city,
+                            "post_offices": [o.get("Name") for o in first["PostOffice"] if o.get("Name")][:5],
+                        }
+                        _PINCODE_CACHE[p] = result
+                        return result
+        except Exception as e:
+            logger.warning(f"Failed attempt {attempt + 1} to lookup pincode {p}: {e}")
 
     return None

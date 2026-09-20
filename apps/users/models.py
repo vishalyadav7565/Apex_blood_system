@@ -107,8 +107,13 @@ class User(AbstractUser):
 
     def save(self, *args, **kwargs):
         if not self.user_id_code:
-            next_id = (type(self).objects.order_by('-id').values_list('id', flat=True).first() or 0) + 1
-            self.user_id_code = f'ALS-{10000 + next_id}'
+            base = self.id or ((type(self).objects.order_by('-id').values_list('id', flat=True).first() or 0) + 1)
+            code = f'ALS-{10000 + base}'
+            counter = 1
+            while type(self).objects.filter(user_id_code=code).exclude(pk=self.pk).exists():
+                code = f'ALS-{10000 + base + counter}'
+                counter += 1
+            self.user_id_code = code
 
         # Auto-fill state, district, city from pincode if state or district is empty
         if self.pincode:
