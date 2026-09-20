@@ -128,10 +128,45 @@ def advanced_users(request):
     ambulance_rows = list(AmbulanceRequest.objects.using('ambulance_db').select_related('driver').order_by('-created_at'))
     trip_rows = list(Trip.objects.using('ambulance_db').select_related('driver__ambulance').order_by('-created_at'))
 
+def _get_prescription_image_url(item, request=None):
+    img = item.prescription_image or item.prescription
+    if not img:
+        return None
+    val = str(img).strip()
+    if not val:
+        return None
+    if val.startswith('http://') or val.startswith('https://'):
+        return val
+    try:
+        url = img.url
+        if url.startswith('http://') or url.startswith('https://'):
+            return url
+        if url.startswith('/media/http://') or url.startswith('/media/https://'):
+            return url.replace('/media/', '', 1)
+        if request:
+            return request.build_absolute_uri(url)
+        return f"https://api.apexlifesaver.com{url}"
+    except Exception:
+        return f"https://api.apexlifesaver.com/media/{val}"
+
+
+def _get_hospital_info(hospital):
+    if not hospital:
+        return None
+    return {
+        'id': hospital.id,
+        'name': hospital.name,
+        'phone': hospital.phone,
+        'email': hospital.email,
+        'address': hospital.address,
+    }
+
+
     blood_by_user = {}
     blood_user_ids = set()
     for item in blood_rows:
         blood_user_ids.add(item.user_id)
+        hospital = item.accepted_hospital
         blood_by_user.setdefault(item.user_id, []).append({
             'id': item.id,
             'request_code': item.request_code or f'#BR-{10000 + item.id}',
@@ -144,8 +179,9 @@ def advanced_users(request):
             'user_address': item.user_address,
             'latitude': item.latitude,
             'longitude': item.longitude,
-            'prescription_image': item.prescription_image.url if item.prescription_image else (item.prescription.url if item.prescription else None),
-            'accepted_hospital': item.accepted_hospital.name if item.accepted_hospital else None,
+            'prescription_image': _get_prescription_image_url(item, request),
+            'accepted_hospital': hospital.name if hospital else None,
+            'hospital_details': _get_hospital_info(hospital),
             'created_at': item.created_at,
         })
 
@@ -1440,18 +1476,20 @@ def _status_steps(status_value):
 
 
 def _blood_request_detail(item, request):
-    image = item.prescription_image or item.prescription
+    hospital = item.accepted_hospital
     return {
         'id': item.id,
         'request_code': item.request_code or f'#BR-{10000 + item.id}',
-        'patient_name': item.patient_name or item.user_name or item.user.get_full_name(),
-        'patient_phone': item.patient_phone or item.user_phone or item.user.phone,
+        'patient_name': item.patient_name or item.user_name or (item.user.get_full_name() if item.user else None),
+        'patient_phone': item.patient_phone or item.user_phone or (item.user.phone if item.user else None),
         'required_blood_group': item.blood_group,
         'units': item.units or item.blood_units,
         'reason': item.reason,
         'created_at': item.created_at,
         'location': item.user_address,
-        'prescription_image': request.build_absolute_uri(image.url) if image else None,
+        'prescription_image': _get_prescription_image_url(item, request),
+        'accepted_hospital': hospital.name if hospital else None,
+        'hospital_details': _get_hospital_info(hospital),
         'status': item.status,
         'status_steps': _status_steps(item.status),
     }
