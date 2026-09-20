@@ -844,3 +844,19 @@ def firebase_login(request):
             {"error": f"Invalid or expired Firebase token: {str(e)}"},
             status=status.HTTP_401_UNAUTHORIZED
         )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def pincode_lookup_view(request, pincode):
+    from apps.users.pincode_utils import lookup_pincode
+    info = lookup_pincode(pincode)
+    if info:
+        return Response({
+            "success": True,
+            "data": info
+        }, status=status.HTTP_200_OK)
+    return Response({
+        "success": False,
+        "message": "Pincode not found or invalid format."
+    }, status=status.HTTP_404_NOT_FOUND)

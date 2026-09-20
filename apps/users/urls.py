@@ -12,6 +12,7 @@ from .views import (
     set_user_active,
     create_support_ticket,
     firebase_login,
+    pincode_lookup_view,
 )
 
 urlpatterns = [
@@ -27,4 +28,5 @@ urlpatterns = [
     path('admin/<int:user_id>/active/', set_user_active),
     path('save-fcm-token/', save_fcm_token),
     path('support/create/', create_support_ticket),
+    path('pincode/<str:pincode>/', pincode_lookup_view),
 ]

@@ -29,7 +29,9 @@ from .views import (
     get_ambulances,
     approve_ambulance_admin,
     reject_ambulance_admin,
+    update_user_profile,
 )
+from apps.users.views import pincode_lookup_view
 
 urlpatterns = [
 
@@ -57,9 +59,11 @@ urlpatterns = [
         advanced_users
     ),
     path('users/<int:user_id>/profile/', user_profile),
+    path('users/<int:user_id>/update/', update_user_profile),
     path('users/<int:user_id>/toggle-active/', toggle_user_active),
     path('users/add-user/', add_admin_user),
     path('users/live-map/', live_users_map),
+    path('pincode/<str:pincode>/', pincode_lookup_view),
     path('requests/blood/<int:request_id>/', blood_request_detail),
     path('requests/ambulance/<int:request_id>/', ambulance_request_detail),
 

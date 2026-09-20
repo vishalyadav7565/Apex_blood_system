@@ -1658,6 +1658,8 @@ def user_profile(request, user_id):
         'user': {
             'id': user.id,
             'user_id_code': user.user_id_code or f'ALS-{10000 + user.id}',
+            'first_name': user.first_name,
+            'last_name': user.last_name,
             'full_name': user.get_full_name(),
             'phone': user.phone,
             'email': user.email,
@@ -1668,6 +1670,7 @@ def user_profile(request, user_id):
             'district': user.district,
             'city': user.city,
             'address': user.address,
+            'pincode': user.pincode,
             'is_active': user.is_active,
             'is_available': user.is_available,
             'created_at': user.created_at,
@@ -1809,3 +1812,82 @@ def live_users_map(request):
     if search:
         users = users.filter(Q(first_name__icontains=search) | Q(last_name__icontains=search) | Q(phone__icontains=search) | Q(user_id_code__icontains=search))
     return Response(list(users.values('id', 'user_id_code', 'first_name', 'last_name', 'phone', 'state', 'district', 'city', 'latitude', 'longitude', 'is_available', 'is_active')))
+
+
+@api_view(['POST', 'PUT'])
+@permission_classes([IsAuthenticated])
+def update_user_profile(request, user_id):
+    if not _admin_only(request):
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
+
+    user = get_object_or_404(User, id=user_id)
+    data = request.data
+
+    if 'first_name' in data:
+        user.first_name = (data.get('first_name') or '').strip()
+    if 'last_name' in data:
+        user.last_name = (data.get('last_name') or '').strip()
+    if 'email' in data:
+        user.email = (data.get('email') or '').strip()
+    if 'phone' in data:
+        user.phone = (data.get('phone') or '').strip()
+    if 'age' in data:
+        age_val = data.get('age')
+        user.age = int(age_val) if age_val is not None and str(age_val).isdigit() else None
+    if 'gender' in data:
+        user.gender = data.get('gender') or None
+    if 'blood_group' in data:
+        user.blood_group = data.get('blood_group') or None
+    if 'address' in data:
+        user.address = (data.get('address') or '').strip() or None
+    if 'pincode' in data:
+        user.pincode = (data.get('pincode') or '').strip() or None
+    if 'city' in data:
+        user.city = (data.get('city') or '').strip() or None
+    if 'district' in data:
+        user.district = (data.get('district') or '').strip() or None
+    if 'state' in data:
+        user.state = (data.get('state') or '').strip() or None
+
+    # Auto-resolve pincode if provided and state/district missing
+    if user.pincode:
+        clean_pin = str(user.pincode).strip()
+        if len(clean_pin) == 6 and clean_pin.isdigit() and (not user.state or not user.district):
+            try:
+                from apps.users.pincode_utils import lookup_pincode
+                info = lookup_pincode(clean_pin)
+                if info:
+                    if not user.state and info.get('state'):
+                        user.state = info['state']
+                    if not user.district and info.get('district'):
+                        user.district = info['district']
+                    if not user.city and info.get('city'):
+                        user.city = info['city']
+            except Exception:
+                pass
+
+    user.save()
+
+    return Response({
+        'success': True,
+        'message': 'User profile updated successfully.',
+        'user': {
+            'id': user.id,
+            'user_id_code': user.user_id_code or f'ALS-{10000 + user.id}',
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'full_name': user.get_full_name(),
+            'phone': user.phone,
+            'email': user.email,
+            'age': user.age,
+            'gender': user.gender,
+            'blood_group': user.blood_group,
+            'state': user.state,
+            'district': user.district,
+            'city': user.city,
+            'address': user.address,
+            'pincode': user.pincode,
+            'is_active': user.is_active,
+            'is_available': user.is_available,
+        }
+    })

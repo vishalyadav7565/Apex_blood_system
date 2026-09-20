@@ -109,6 +109,25 @@ class User(AbstractUser):
         if not self.user_id_code:
             next_id = (type(self).objects.order_by('-id').values_list('id', flat=True).first() or 0) + 1
             self.user_id_code = f'ALS-{10000 + next_id}'
+
+        # Auto-fill state, district, city from pincode if state or district is empty
+        if self.pincode:
+            clean_pin = str(self.pincode).strip()
+            if len(clean_pin) == 6 and clean_pin.isdigit():
+                if not self.state or not self.district:
+                    try:
+                        from apps.users.pincode_utils import lookup_pincode
+                        info = lookup_pincode(clean_pin)
+                        if info:
+                            if not self.state and info.get('state'):
+                                self.state = info['state']
+                            if not self.district and info.get('district'):
+                                self.district = info['district']
+                            if not self.city and info.get('city'):
+                                self.city = info['city']
+                    except Exception:
+                        pass
+
         super().save(*args, **kwargs)
 
     def __str__(self):
