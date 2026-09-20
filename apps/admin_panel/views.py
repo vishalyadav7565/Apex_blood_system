@@ -29,6 +29,7 @@ from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.users.models import User, HelpSupport, UserActivityLog
+from apps.users.views import normalize_phone
 from apps.blood_requests.models import BloodRequest
 from apps.hospitals.models import Hospital
 from apps.notifications.utils import send_push_notification
@@ -209,27 +210,52 @@ def _get_hospital_info(hospital):
 
     # Existing ambulance bookings are stored as Trip records and are included
     # until all clients write the dedicated AmbulanceRequest model.
-    phone_to_user_id = dict(User.objects.filter(phone__isnull=False).values_list('phone', 'id'))
+    phone_to_user_id = {}
+    for u in User.objects.filter(phone__isnull=False):
+        c = normalize_phone(u.phone)
+        if c:
+            phone_to_user_id[c] = u.id
+            phone_to_user_id[f"+91{c}"] = u.id
+        phone_to_user_id[u.phone] = u.id
+
     for item in trip_rows:
-        user_id = phone_to_user_id.get(item.patient_phone)
+        user_id = phone_to_user_id.get(normalize_phone(item.patient_phone)) or phone_to_user_id.get(item.patient_phone)
         if not user_id:
             continue
         ambulance_user_ids.add(user_id)
+        driver = item.driver
+        ambulance = driver.ambulance if driver else None
+        hospital = ambulance.hospital if ambulance and hasattr(ambulance, 'hospital') else None
         ambulance_by_user.setdefault(user_id, []).append({
             'id': item.id,
             'request_code': f'#AR-{20000 + item.id}',
             'patient_name': item.patient_name,
             'patient_phone': item.patient_phone,
             'emergency_type': 'Medical Emergency',
+            'pickup': {
+                'address': item.pickup_address,
+                'is_live': item.pickup_latitude is not None and item.pickup_longitude is not None,
+                'latitude': item.pickup_latitude,
+                'longitude': item.pickup_longitude,
+            },
             'pickup_address': item.pickup_address,
             'pickup_latitude': item.pickup_latitude,
             'pickup_longitude': item.pickup_longitude,
+            'destination': {
+                'hospital_name': hospital.name if hospital else (item.destination_address or 'Emergency Hospital'),
+                'address': item.destination_address,
+            },
             'destination_address': item.destination_address,
-            'hospital_name': item.driver.ambulance.hospital.name if item.driver and item.driver.ambulance and item.driver.ambulance.hospital else None,
-            'driver_name': item.driver.name if item.driver else None,
-            'driver_phone': item.driver.phone if item.driver else None,
-            'vehicle_number': item.driver.ambulance.vehicle_number if item.driver and item.driver.ambulance else None,
-            'status': item.status,
+            'hospital_name': hospital.name if hospital else (item.destination_address or 'Emergency Hospital'),
+            'driver': {
+                'name': driver.name if driver else None,
+                'phone': driver.phone if driver else None,
+                'vehicle_number': ambulance.vehicle_number if ambulance else None,
+            },
+            'driver_name': driver.name if driver else None,
+            'driver_phone': driver.phone if driver else None,
+            'vehicle_number': ambulance.vehicle_number if ambulance else None,
+            'status': item.status.replace('_', ' ').title(),
             'created_at': item.created_at,
         })
 
@@ -1530,8 +1556,22 @@ def user_profile(request, user_id):
     if not _admin_only(request):
         return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
     user = get_object_or_404(User, id=user_id)
-    blood_requests = BloodRequest.objects.filter(user_id=user.id).select_related('accepted_hospital').order_by('-created_at')
-    ambulance_requests = AmbulanceRequest.objects.using('ambulance_db').filter(user_id=user.id).select_related('driver').order_by('-created_at')
+    clean_phone = normalize_phone(user.phone)
+    raw_phone = user.phone or ''
+    phone_filter = (
+        Q(patient_phone=raw_phone) |
+        Q(patient_phone=f"+91{clean_phone}") |
+        Q(patient_phone=clean_phone)
+    ) if clean_phone else Q(pk__in=[])
+
+    ambulance_requests = list(AmbulanceRequest.objects.using('ambulance_db').filter(
+        Q(user_id=user.id) | phone_filter
+    ).select_related('driver').order_by('-created_at'))
+
+    trip_requests = list(Trip.objects.using('ambulance_db').filter(
+        phone_filter
+    ).select_related('driver__ambulance__hospital').order_by('-created_at'))
+
     activity = list(UserActivityLog.objects.filter(user_id=user.id).order_by('-created_at')[:100])
     events = []
     for log in activity:
@@ -1543,6 +1583,18 @@ def user_profile(request, user_id):
             'label': log.title,
             'request_id': int(log.reference_id) if log.reference_id and log.reference_id.isdigit() else None,
         })
+
+    for trip in trip_requests[:10]:
+        events.append({
+            'created_at': trip.created_at,
+            'time': timezone.localtime(trip.created_at).strftime('%I:%M %p'),
+            'icon': '🚑',
+            'type': 'ambulance_request',
+            'label': f"Ambulance Booking: {trip.status.replace('_', ' ').title()}",
+            'request_id': trip.id,
+        })
+    events.sort(key=lambda x: x['created_at'], reverse=True)
+
     grouped = {}
     for event in events:
         event_date = event.pop('created_at').date()
@@ -1551,6 +1603,45 @@ def user_profile(request, user_id):
 
     serialized_blood = [_blood_request_detail(item, request) for item in blood_requests]
     serialized_ambulance = [_ambulance_request_detail(item) for item in ambulance_requests]
+    existing_trip_ids = {a.get('id') for a in serialized_ambulance}
+    for trip in trip_requests:
+        if trip.id in existing_trip_ids:
+            continue
+        driver = trip.driver
+        ambulance = driver.ambulance if driver else None
+        hospital = ambulance.hospital if ambulance and hasattr(ambulance, 'hospital') else None
+        serialized_ambulance.append({
+            'id': trip.id,
+            'request_code': f'#AR-{20000 + trip.id}',
+            'patient_name': trip.patient_name or user.get_full_name(),
+            'patient_phone': trip.patient_phone or user.phone,
+            'emergency_type': 'Medical Emergency',
+            'created_at': trip.created_at,
+            'status': trip.status.replace('_', ' ').title(),
+            'pickup': {
+                'address': trip.pickup_address,
+                'is_live': trip.pickup_latitude is not None and trip.pickup_longitude is not None,
+                'latitude': trip.pickup_latitude,
+                'longitude': trip.pickup_longitude,
+            },
+            'pickup_address': trip.pickup_address,
+            'pickup_latitude': trip.pickup_latitude,
+            'pickup_longitude': trip.pickup_longitude,
+            'destination': {
+                'hospital_name': hospital.name if hospital else (trip.destination_address or 'Emergency Hospital'),
+                'address': trip.destination_address,
+            },
+            'destination_address': trip.destination_address,
+            'hospital_name': hospital.name if hospital else (trip.destination_address or 'Emergency Hospital'),
+            'driver': {
+                'name': driver.name if driver else None,
+                'phone': driver.phone if driver else None,
+                'vehicle_number': ambulance.vehicle_number if ambulance else None,
+            },
+            'driver_name': driver.name if driver else None,
+            'driver_phone': driver.phone if driver else None,
+            'vehicle_number': ambulance.vehicle_number if ambulance else None,
+        })
 
     return Response({
         'user': {
