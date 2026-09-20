@@ -96,39 +96,6 @@ def _serialize_admin_user(user, blood_requests, ambulance_requests):
     }
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def advanced_users(request):
-    if not _admin_only(request):
-        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
-
-    now = timezone.now()
-    search = request.query_params.get('search', '').strip()
-    state = request.query_params.get('state', '').strip()
-    district = request.query_params.get('district', '').strip()
-    blood_group = request.query_params.get('blood_group', '').strip()
-    activity_status = request.query_params.get('activity_status', '').strip()
-
-    users = User.objects.all()
-    if search:
-        users = users.filter(
-            Q(first_name__icontains=search)
-            | Q(last_name__icontains=search)
-            | Q(phone__icontains=search)
-            | Q(email__icontains=search)
-            | Q(user_id_code__icontains=search)
-        )
-    if state:
-        users = users.filter(state__iexact=state)
-    if district:
-        users = users.filter(district__iexact=district)
-    if blood_group:
-        users = users.filter(blood_group__iexact=blood_group)
-
-    blood_rows = list(BloodRequest.objects.select_related('accepted_hospital').order_by('-created_at'))
-    ambulance_rows = list(AmbulanceRequest.objects.using('ambulance_db').select_related('driver').order_by('-created_at'))
-    trip_rows = list(Trip.objects.using('ambulance_db').select_related('driver__ambulance').order_by('-created_at'))
-
 def _get_prescription_image_url(item, request=None):
     img = item.prescription_image or item.prescription
     if not img:
@@ -162,6 +129,39 @@ def _get_hospital_info(hospital):
         'address': hospital.address,
     }
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def advanced_users(request):
+    if not _admin_only(request):
+        return Response({'error': 'Admin permission required.'}, status=status.HTTP_403_FORBIDDEN)
+
+    now = timezone.now()
+    search = request.query_params.get('search', '').strip()
+    state = request.query_params.get('state', '').strip()
+    district = request.query_params.get('district', '').strip()
+    blood_group = request.query_params.get('blood_group', '').strip()
+    activity_status = request.query_params.get('activity_status', '').strip()
+
+    users = User.objects.all()
+    if search:
+        users = users.filter(
+            Q(first_name__icontains=search)
+            | Q(last_name__icontains=search)
+            | Q(phone__icontains=search)
+            | Q(email__icontains=search)
+            | Q(user_id_code__icontains=search)
+        )
+    if state:
+        users = users.filter(state__iexact=state)
+    if district:
+        users = users.filter(district__iexact=district)
+    if blood_group:
+        users = users.filter(blood_group__iexact=blood_group)
+
+    blood_rows = list(BloodRequest.objects.select_related('accepted_hospital').order_by('-created_at'))
+    ambulance_rows = list(AmbulanceRequest.objects.using('ambulance_db').select_related('driver').order_by('-created_at'))
+    trip_rows = list(Trip.objects.using('ambulance_db').select_related('driver__ambulance').order_by('-created_at'))
 
     blood_by_user = {}
     blood_user_ids = set()
