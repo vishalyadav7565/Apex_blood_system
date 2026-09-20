@@ -1,6 +1,5 @@
-from os import name
-
-from django.urls import path
+from django.urls import path, re_path
+from ambulance_apps.trips.views import verify_pickup_otp
 
 
 from .views import (
@@ -99,5 +98,15 @@ path(
 path(
     "save_hospital_fcm_token/",
     save_hospital_fcm_token
+),
+re_path(
+    r'^.*(?:ambulance/bookings|trip)/(?P<trip_id>\d+)/verify-pickup-otp/?$',
+    verify_pickup_otp,
+    name='hospital-verify-pickup-otp'
+),
+re_path(
+    r'^.*verify-pickup-otp/(?P<trip_id>\d+)/?$',
+    verify_pickup_otp,
+    name='hospital-verify-pickup-otp-fallback'
 ),
 ]

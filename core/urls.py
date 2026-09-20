@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 
 from django.conf import settings
 from django.conf.urls.static import static
@@ -10,6 +10,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from django.http import JsonResponse
+from ambulance_apps.trips.views import verify_pickup_otp
 
 def root_health_check(request):
     return JsonResponse({
@@ -99,7 +100,6 @@ urlpatterns = [
         include('ambulance_apps.documents.urls')
     ),
 
-
     # ADMIN PANEL
     path(
         'api/admin/',
@@ -117,6 +117,18 @@ urlpatterns = [
         'api/token/refresh/',
         TokenRefreshView.as_view(),
         name='token_refresh'
+    ),
+
+    # FALLBACK ROUTING FOR MALFORMED CLIENT VERIFY-PICKUP-OTP REQUESTS
+    re_path(
+        r'^api/.*(?:ambulance/bookings|trip)/(?P<trip_id>\d+)/verify-pickup-otp/?$',
+        verify_pickup_otp,
+        name='global-verify-pickup-otp'
+    ),
+    re_path(
+        r'^api/.*verify-pickup-otp/(?P<trip_id>\d+)/?$',
+        verify_pickup_otp,
+        name='global-verify-pickup-otp-fallback'
     ),
 ]
 
@@ -138,7 +150,6 @@ except ImportError:
 
 # MEDIA & STATIC FILES (SERVE UNCONDITIONALLY FOR PRODUCTION & DOCKER DEPLOYMENTS)
 from django.views.static import serve
-from django.urls import re_path
 
 urlpatterns += [
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
@@ -148,5 +159,3 @@ urlpatterns += [
 if settings.DEBUG:
     from django.contrib.staticfiles.urls import staticfiles_urlpatterns
     urlpatterns += staticfiles_urlpatterns()
-
-
