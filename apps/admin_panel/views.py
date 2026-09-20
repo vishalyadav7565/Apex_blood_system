@@ -225,7 +225,12 @@ def _get_hospital_info(hospital):
         ambulance_user_ids.add(user_id)
         driver = item.driver
         ambulance = driver.ambulance if driver else None
-        hospital = ambulance.hospital if ambulance and hasattr(ambulance, 'hospital') else None
+        hospital_name = None
+        if ambulance and ambulance.hospital_id:
+            hospital_name = Hospital.objects.filter(id=ambulance.hospital_id).values_list('name', flat=True).first()
+        if not hospital_name:
+            hospital_name = item.destination_address or 'Emergency Hospital'
+
         ambulance_by_user.setdefault(user_id, []).append({
             'id': item.id,
             'request_code': f'#AR-{20000 + item.id}',
@@ -242,11 +247,11 @@ def _get_hospital_info(hospital):
             'pickup_latitude': item.pickup_latitude,
             'pickup_longitude': item.pickup_longitude,
             'destination': {
-                'hospital_name': hospital.name if hospital else (item.destination_address or 'Emergency Hospital'),
+                'hospital_name': hospital_name,
                 'address': item.destination_address,
             },
             'destination_address': item.destination_address,
-            'hospital_name': hospital.name if hospital else (item.destination_address or 'Emergency Hospital'),
+            'hospital_name': hospital_name,
             'driver': {
                 'name': driver.name if driver else None,
                 'phone': driver.phone if driver else None,
@@ -1570,7 +1575,7 @@ def user_profile(request, user_id):
 
     trip_requests = list(Trip.objects.using('ambulance_db').filter(
         phone_filter
-    ).select_related('driver__ambulance__hospital').order_by('-created_at'))
+    ).select_related('driver__ambulance').order_by('-created_at'))
 
     activity = list(UserActivityLog.objects.filter(user_id=user.id).order_by('-created_at')[:100])
     events = []
@@ -1609,7 +1614,12 @@ def user_profile(request, user_id):
             continue
         driver = trip.driver
         ambulance = driver.ambulance if driver else None
-        hospital = ambulance.hospital if ambulance and hasattr(ambulance, 'hospital') else None
+        hospital_name = None
+        if ambulance and ambulance.hospital_id:
+            hospital_name = Hospital.objects.filter(id=ambulance.hospital_id).values_list('name', flat=True).first()
+        if not hospital_name:
+            hospital_name = trip.destination_address or 'Emergency Hospital'
+
         serialized_ambulance.append({
             'id': trip.id,
             'request_code': f'#AR-{20000 + trip.id}',
@@ -1628,11 +1638,11 @@ def user_profile(request, user_id):
             'pickup_latitude': trip.pickup_latitude,
             'pickup_longitude': trip.pickup_longitude,
             'destination': {
-                'hospital_name': hospital.name if hospital else (trip.destination_address or 'Emergency Hospital'),
+                'hospital_name': hospital_name,
                 'address': trip.destination_address,
             },
             'destination_address': trip.destination_address,
-            'hospital_name': hospital.name if hospital else (trip.destination_address or 'Emergency Hospital'),
+            'hospital_name': hospital_name,
             'driver': {
                 'name': driver.name if driver else None,
                 'phone': driver.phone if driver else None,
