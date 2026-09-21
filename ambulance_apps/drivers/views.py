@@ -5,6 +5,7 @@ from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.mail import send_mail
 from django.core.signing import Signer, BadSignature
+from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -474,9 +475,13 @@ def link_ambulance(request):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    driver.ambulance = ambulance
-    driver.verification_status = 'pending_owner_review'
-    driver.save(update_fields=['ambulance', 'verification_status'])
+    with transaction.atomic():
+        # Unlink any other driver currently assigned to this ambulance to avoid unique constraint violations on OneToOne field
+        Driver.objects.filter(ambulance=ambulance).exclude(id=driver.id).update(ambulance=None)
+
+        driver.ambulance = ambulance
+        driver.verification_status = 'pending_owner_review'
+        driver.save(update_fields=['ambulance', 'verification_status'])
 
     # Send mail notification to owner
     _notify_owner_about_driver_review(driver, request)

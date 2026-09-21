@@ -76,6 +76,33 @@ class DriverAPITests(APITestCase):
         self.assertEqual(driver.verification_status, "pending_owner_review")
         self.assertEqual(mock_send_mail.call_count, 1)
 
+    @patch("ambulance_apps.drivers.views.send_mail")
+    def test_link_ambulance_reassignment(self, mock_send_mail):
+        driver1 = Driver.objects.create(
+            name="Driver One",
+            phone="9111111111",
+            password="secure",
+            ambulance=self.ambulance
+        )
+        driver2 = Driver.objects.create(
+            name="Driver Two",
+            phone="9222222222",
+            password="secure"
+        )
+        response = self.client.post(
+            '/api/ambulance/drivers/link-ambulance/',
+            {
+                "driver_id": driver2.id,
+                "ambulance_number": self.ambulance.vehicle_number
+            },
+            format='json'
+        )
+        self.assertEqual(response.status_code, 200)
+        driver1.refresh_from_db()
+        driver2.refresh_from_db()
+        self.assertIsNone(driver1.ambulance)
+        self.assertEqual(driver2.ambulance, self.ambulance)
+
     def test_document_upload_triggers_ocr(self):
         driver = Driver.objects.create(
             name="Virat Kohli",
