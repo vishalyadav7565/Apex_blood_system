@@ -750,13 +750,37 @@ def update_status(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def update_location(request):
-    driver_id = request.data.get('driver_id')
-    lat = request.data.get('latitude')
-    lng = request.data.get('longitude')
-    
+    driver_id = (
+        request.data.get('driver_id')
+        or request.data.get('driver')
+        or request.data.get('id')
+    )
+    lat = (
+        request.data.get('latitude')
+        if request.data.get('latitude') is not None
+        else (
+            request.data.get('lat')
+            if request.data.get('lat') is not None
+            else request.data.get('pickup_latitude')
+        )
+    )
+    lng = (
+        request.data.get('longitude')
+        if request.data.get('longitude') is not None
+        else (
+            request.data.get('lng')
+            if request.data.get('lng') is not None
+            else (
+                request.data.get('long')
+                if request.data.get('long') is not None
+                else request.data.get('pickup_longitude')
+            )
+        )
+    )
+
     if driver_id is None or lat is None or lng is None:
         return Response({'detail': 'driver_id, latitude and longitude are required.'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
     try:
         lat = float(lat)
         lng = float(lng)
@@ -773,7 +797,13 @@ def update_location(request):
         ambulance = driver.ambulance
         ambulance.status = 'online'
         ambulance.is_available = True
-        ambulance.save(update_fields=['status', 'is_available', 'updated_at'])
+        if driver.is_verified:
+            ambulance.is_approved = True
+            ambulance.is_active = True
+            ambulance.approval_status = 'approved'
+            ambulance.save(update_fields=['status', 'is_available', 'is_approved', 'is_active', 'approval_status', 'updated_at'])
+        else:
+            ambulance.save(update_fields=['status', 'is_available', 'updated_at'])
 
     location_data = {
         'event': 'AMBULANCE_LOCATION_UPDATED',
