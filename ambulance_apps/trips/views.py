@@ -56,12 +56,34 @@ def _distance_km(latitude_a, longitude_a, latitude_b, longitude_b):
     return 2 * 6371 * asin(sqrt(haversine))
 
 
+def _normalize_ambulance_type(type_str):
+    if not type_str:
+        return type_str
+    val = str(type_str).strip().lower()
+    mapping = {
+        'bls': 'BLS',
+        'basic': 'BLS',
+        'basic life support': 'BLS',
+        'als': 'ALS',
+        'advanced': 'ALS',
+        'advanced life support': 'ALS',
+        'icu': 'ICU',
+        'icu ambulance': 'ICU',
+        'neonatal': 'Neonatal',
+        'patient transport': 'Patient Transport',
+        'transport': 'Patient Transport',
+        'patient_transport': 'Patient Transport',
+    }
+    return mapping.get(val, type_str)
+
+
 def _nearby_ambulance_options(ambulance_type, latitude, longitude, max_distance_km):
     """Find available ambulances of a type and order them by driver distance."""
+    norm_type = _normalize_ambulance_type(ambulance_type)
     candidates = (
         Ambulance.objects.select_related('driver')
         .filter(
-            ambulance_type=ambulance_type,
+            ambulance_type__iexact=norm_type,
             is_active=True,
             is_approved=True,
             is_available=True,
@@ -240,11 +262,12 @@ def create_booking(request):
         else:
             # Lock the ambulance before reserving it, so concurrent requests for
             # the same type cannot assign the same vehicle twice.
+            norm_type = _normalize_ambulance_type(ambulance_type)
             candidates = (
                 Ambulance.objects.select_for_update(skip_locked=True)
                 .select_related('driver')
                 .filter(
-                    ambulance_type=ambulance_type,
+                    ambulance_type__iexact=norm_type,
                     is_active=True,
                     is_approved=True,
                     is_available=True,

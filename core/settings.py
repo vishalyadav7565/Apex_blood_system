@@ -40,7 +40,7 @@ DEBUG = os.getenv(
 
 allowed_env = os.getenv("ALLOWED_HOSTS", "*")
 ALLOWED_HOSTS = [h.strip() for h in allowed_env.split(",") if h.strip()]
-for internal_host in ["localhost", "127.0.0.1", "0.0.0.0", "web"]:
+for internal_host in ["localhost", "127.0.0.1", "0.0.0.0", "web", "hng-edith.duckdns.org", ".duckdns.org"]:
     if internal_host not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(internal_host)
 
@@ -186,10 +186,12 @@ if USE_SQLITE:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
+            'TEST': {'DEPENDENCIES': []},
         },
         'ambulance_db': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'ambulance_db.sqlite3',
+            'TEST': {'DEPENDENCIES': []},
         }
     }
 else:
@@ -203,6 +205,7 @@ else:
             'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
             'HOST': db_host,
             'PORT': os.getenv('DB_PORT', '5432'),
+            'TEST': {'DEPENDENCIES': []},
         },
         'ambulance_db': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -211,6 +214,7 @@ else:
             'PASSWORD': os.getenv('AMBULANCE_DB_PASSWORD', os.getenv('DB_PASSWORD', 'postgres')),
             'HOST': ambulance_db_host,
             'PORT': os.getenv('AMBULANCE_DB_PORT', os.getenv('DB_PORT', '5432')),
+            'TEST': {'DEPENDENCIES': []},
         }
     }
 
