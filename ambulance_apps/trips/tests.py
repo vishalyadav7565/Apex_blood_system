@@ -7,7 +7,7 @@ from ambulance_apps.trips.models import Trip
 
 
 class CreateBookingTests(APITestCase):
-    databases = {'ambulance_db'}
+    databases = {'default', 'ambulance_db'}
 
     def setUp(self):
         owner = Owner.objects.create(

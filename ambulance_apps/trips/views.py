@@ -212,6 +212,7 @@ def create_booking(request):
     driver_id = request.data.get('driver') or request.data.get('driver_id')
     ambulance_id = request.data.get('ambulance_id')
     ambulance_type = request.data.get('ambulance_type')
+    driver_distance_km = None
     if not driver_id and not ambulance_id and not ambulance_type:
         return Response(
             {'detail': 'Provide ambulance_id, driver_id, or ambulance_type.'},
@@ -234,7 +235,7 @@ def create_booking(request):
     with transaction.atomic(using='ambulance_db'):
         if ambulance_id:
             ambulance = get_object_or_404(
-                Ambulance.objects.select_for_update().select_related('driver'),
+                Ambulance.objects.select_for_update(),
                 pk=ambulance_id,
             )
             driver = getattr(ambulance, 'driver', None)
@@ -306,7 +307,7 @@ def create_booking(request):
             ambulance, driver_distance_km = min(nearby_candidates, key=lambda item: item[1])
             driver = ambulance.driver
 
-        if ambulance_type and ambulance.ambulance_type != ambulance_type:
+        if ambulance_type and ambulance.ambulance_type.strip().lower() != ambulance_type.strip().lower():
             return Response(
                 {'detail': 'The selected ambulance does not match the requested ambulance type.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -345,7 +346,7 @@ def create_booking(request):
         'trip': TripSerializer(trip).data,
     }
     _send_realtime_event('drivers_online', dispatch_event)
-    if ambulance_type and not driver_id:
+    if driver_distance_km is not None:
         response_data['driver_distance_km'] = round(driver_distance_km, 2)
         response_data['search_radius_km'] = MAX_BOOKING_DISTANCE_KM
     return Response(response_data, status=status.HTTP_201_CREATED)
@@ -582,7 +583,7 @@ def track_booking(request, trip_id):
 @permission_classes([AllowAny])
 def nearby_booking_options(request):
     """Show the two closest available ambulances within five kilometres."""
-    ambulance_type = request.query_params.get('ambulance_type')
+    ambulance_type = _normalize_ambulance_type(request.query_params.get('ambulance_type'))
     latitude = request.query_params.get('pickup_latitude')
     longitude = request.query_params.get('pickup_longitude')
     if not ambulance_type or latitude is None or longitude is None:
