@@ -3,6 +3,7 @@ import json
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.conf import settings
+from django.core.cache import cache
 from django.core.mail import send_mail
 from django.core.signing import Signer, BadSignature
 from django.db import transaction
@@ -485,6 +486,7 @@ def link_ambulance(request):
 
     # Send mail notification to owner
     _notify_owner_about_driver_review(driver, request)
+    cache_driver_profile(driver.id)
 
     return Response({
         'message': 'Ambulance linked successfully. Owner review notification sent.',
@@ -527,6 +529,7 @@ def owner_review(request):
         return Response({'detail': 'Action must be approve or reject.'}, status=status.HTTP_400_BAD_REQUEST)
 
     driver.save(update_fields=['verification_status', 'is_verified', 'owner_reviewed_at', 'rejection_reason'])
+    cache_driver_profile(driver.id)
     return Response(DriverSerializer(driver).data, status=status.HTTP_200_OK)
 
 
@@ -550,6 +553,7 @@ def verify_driver_by_owner_email(request):
             driver.ambulance.is_active = True
             driver.ambulance.approval_status = 'approved'
             driver.ambulance.save(update_fields=['is_approved', 'is_active', 'approval_status', 'updated_at'])
+        cache_driver_profile(driver.id)
         return HttpResponse(
             "<h3>Driver verification complete!</h3>"
             f"<p>Driver <b>{driver.name}</b> has been successfully approved by the owner.</p>"
@@ -565,10 +569,12 @@ def verify_driver_by_owner_email(request):
         )
 
 
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def driver_profile(request, driver_id):
-    driver = get_object_or_404(Driver.objects.select_related('ambulance'), id=driver_id)
+def cache_driver_profile(driver_id):
+    cache_key = f"driver_profile_{driver_id}"
+    driver = Driver.objects.filter(id=driver_id).select_related('ambulance').first()
+    if not driver:
+        cache.delete(cache_key)
+        return None
     data = DriverSerializer(driver).data
     data['verification'] = {
         'is_verified': driver.is_verified,
@@ -589,6 +595,24 @@ def driver_profile(request, driver_id):
             'is_approved': driver.ambulance.is_approved,
             'approval_status': driver.ambulance.approval_status,
         }
+    cache.set(cache_key, data, timeout=3600)
+    return data
+
+
+def get_cached_driver_profile(driver_id):
+    cache_key = f"driver_profile_{driver_id}"
+    data = cache.get(cache_key)
+    if not data:
+        data = cache_driver_profile(driver_id)
+    return data
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def driver_profile(request, driver_id):
+    data = get_cached_driver_profile(driver_id)
+    if not data:
+        return Response({'detail': 'Driver not found.'}, status=status.HTTP_404_NOT_FOUND)
     return Response(data, status=status.HTTP_200_OK)
 
 
@@ -739,11 +763,12 @@ def update_status(request):
         'longitude': driver.current_longitude,
     })
     _broadcast_driver_location_to_users(driver)
+    cached_data = cache_driver_profile(driver.id)
         
     return Response({
         'message': 'Status updated successfully.',
         'is_online': driver.is_online,
-        'driver': DriverSerializer(driver).data
+        'driver': cached_data or DriverSerializer(driver).data
     }, status=status.HTTP_200_OK)
 
 
@@ -817,6 +842,7 @@ def update_location(request):
         _send_realtime_event(f'hospital_{driver.ambulance.hospital_id}', location_data)
 
     _broadcast_driver_location_to_users(driver)
+    cache_driver_profile(driver.id)
     
     return Response({
         'message': 'Location updated successfully.'
