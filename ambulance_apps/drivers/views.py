@@ -513,6 +513,11 @@ def owner_review(request):
         driver.is_verified = True  # Verified by owner
         driver.owner_reviewed_at = timezone.now()
         driver.rejection_reason = None
+        if driver.ambulance:
+            driver.ambulance.is_approved = True
+            driver.ambulance.is_active = True
+            driver.ambulance.approval_status = 'approved'
+            driver.ambulance.save(update_fields=['is_approved', 'is_active', 'approval_status', 'updated_at'])
     elif action == 'reject':
         driver.verification_status = 'rejected_by_owner'
         driver.is_verified = False
@@ -540,6 +545,11 @@ def verify_driver_by_owner_email(request):
         driver.is_verified = True
         driver.owner_reviewed_at = timezone.now()
         driver.save(update_fields=['verification_status', 'is_verified', 'owner_reviewed_at'])
+        if driver.ambulance:
+            driver.ambulance.is_approved = True
+            driver.ambulance.is_active = True
+            driver.ambulance.approval_status = 'approved'
+            driver.ambulance.save(update_fields=['is_approved', 'is_active', 'approval_status', 'updated_at'])
         return HttpResponse(
             "<h3>Driver verification complete!</h3>"
             f"<p>Driver <b>{driver.name}</b> has been successfully approved by the owner.</p>"
@@ -709,10 +719,17 @@ def update_status(request):
         if is_online and ambulance.status != 'busy':
             ambulance.status = 'online'
             ambulance.is_available = True
+            if driver.is_verified:
+                ambulance.is_approved = True
+                ambulance.is_active = True
+                ambulance.approval_status = 'approved'
+                ambulance.save(update_fields=['status', 'is_available', 'is_approved', 'is_active', 'approval_status', 'updated_at'])
+            else:
+                ambulance.save(update_fields=['status', 'is_available', 'updated_at'])
         elif not is_online:
             ambulance.status = 'offline'
             ambulance.is_available = False
-        ambulance.save(update_fields=['status', 'is_available', 'updated_at'])
+            ambulance.save(update_fields=['status', 'is_available', 'updated_at'])
 
     _send_realtime_event(f'driver_{driver.id}', {
         'event': 'DRIVER_STATUS_UPDATED',
