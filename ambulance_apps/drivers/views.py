@@ -705,14 +705,14 @@ def update_status(request):
     except (TypeError, ValueError):
         return Response({'detail': 'latitude and longitude must be numeric.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    driver = get_object_or_404(Driver, id=driver_id)
+    driver = get_object_or_404(Driver.objects.select_related('ambulance'), id=driver_id)
     driver.is_online = is_online
     if lat is not None:
         driver.current_latitude = lat
     if lng is not None:
         driver.current_longitude = lng
     driver.last_location_update = timezone.now()
-    driver.save()
+    driver.save(update_fields=['is_online', 'current_latitude', 'current_longitude', 'last_location_update'])
     
     if driver.ambulance:
         ambulance = driver.ambulance
